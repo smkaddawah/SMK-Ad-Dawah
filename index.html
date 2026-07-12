@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem E-Disiplin - SMK Ad-Da'Wah</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+      .card-stat { transition: transform 0.2s; border-radius: 15px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+      .card-stat:hover { transform: translateY(-5px); }
+      .preview-img { max-width: 100%; max-height: 250px; border-radius: 8px; display: none; margin-top: 10px; border: 2px dashed #198754; padding: 5px; }
+      .custom-sidebar .nav-link.active { background-color: var(--primary-green) !important; color: white !important; font-weight: bold; box-shadow: 0 4px 10px rgba(15, 81, 50, 0.2); }
+      .custom-sidebar .nav-link { color: #333; margin-bottom: 8px; padding: 12px 15px; border-radius: 10px; transition: all 0.2s; font-size: 15px; }
+      .custom-sidebar .nav-link:hover { background-color: #e8f5e9; color: var(--primary-green); transform: translateX(5px); }
+      .offcanvas-start { width: 280px !important; }
+    </style>
+</head>
+<body class="bg-light">
+
+    <nav id="navbar" class="navbar navbar-expand-lg navbar-dark bg-primary-green shadow-sm sticky-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
+                <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" alt="Logo" width="38" class="me-2">
+                E-Tertib Ad-Da'Wah
+            </a>
+            <div class="d-flex ms-auto align-items-center" id="userBadge" style="display: none !important;">
+                <span class="text-white opacity-75 me-1 d-none d-sm-inline">Selamat datang, </span>
+                <span id="txtNamaUser" class="text-white fw-bold me-3">User</span>
+                <button onclick="logout()" class="btn btn-sm btn-danger rounded-pill px-3"><i class="fa-solid fa-right-from-bracket me-1"></i>Keluar</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4 my-md-5">
+        <div id="loginSection" class="row justify-content-center mt-4 mb-5">
+            <div class="col-md-5">
+                <div class="card login-card shadow-lg border-0 p-4 bg-white mx-auto">
+                    <div class="text-center mb-4">
+                        <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" alt="Logo Addawah" width="90" class="mb-3">
+                        <h3 class="fw-bold text-primary-green m-0">E-Tertib Ad-Da'Wah</h3>
+                        <p class="text-muted small">Sistem Pemantauan & Tata Tertib Siswa</p>
+                    </div>
+                    
+                    <form id="formLogin" onsubmit="handleLogin(event)">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-primary-green">Masuk Sebagai</label>
+                            <select class="form-select rounded-3" id="loginRole" required>
+                                <option value="siswa">Siswa (Cek Poin)</option>
+                                <option value="guru">Guru (Kirim Laporan)</option>
+                                <option value="admin">Admin (Kesiswaan)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-primary-green">ID Pengguna / NISN</label>
+                            <input type="text" class="form-control rounded-3" id="loginUser" placeholder="Masukkan NISN / Username" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-primary-green">Kata Sandi</label>
+                            <input type="password" class="form-control rounded-3" id="loginPass" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary-green w-100 py-2.5 rounded-3 fw-bold shadow-sm" id="btnLogin"><i class="fa-solid fa-right-to-bracket me-2"></i>Masuk ke Sistem</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="siswaSection" style="display: none;">
+            <div class="row g-4 mb-4">
+                <div class="col-md-5">
+                    <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100 bg-white">
+                        <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="85" class="mx-auto mb-3" alt="Logo">
+                        <h4 class="fw-bold text-dark mb-1">SMK Ad-Da'Wah Jakarta</h4>
+                        <p class="text-muted mb-0">Portal Disiplin Peserta Didik</p>
+                        <hr>
+                        <span class="badge bg-success fs-6 px-3 py-2 rounded-pill" id="siswaStatus">Aman (Berkelakuan Baik)</span>
+                    </div>
+                </div>
+                <div class="col-md-7">
+                    <div class="card shadow-sm border-0 rounded-4 p-4 bg-white h-100 d-flex flex-column justify-content-center">
+                        <div class="text-center">
+                            <h6 class="text-secondary uppercase fw-semibold mb-2">Total Akumulasi Poin Anda</h6>
+                            <h1 id="siswaPoin" class="display-1 fw-bold text-danger mb-0">0</h1>
+                            <p class="text-muted small mt-2">Maksimal toleransi: 150 Poin</p>
+                            <p class="text-muted small mb-0 px-3"><i class="fa-solid fa-circle-info me-1"></i>Poin akan di-reset otomatis pada awal tahun ajaran baru.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left text-primary-green me-2"></i>📋 Catatan Riwayat Pelanggaran Anda</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr><th>Tanggal</th><th>Jenis Pelanggaran</th><th>Poin</th><th>Pelapor</th><th>Bukti</th></tr>
+                        </thead>
+                        <tbody id="tbRiwayatSiswa"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="guruSection" style="display: none;">
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                        <div class="d-flex align-items-center mb-4 border-bottom pb-3">
+                            <i class="fa-solid fa-pen-to-square text-primary-green fs-3 me-3"></i>
+                            <div>
+                                <h4 class="fw-bold text-dark m-0">Form Pelaporan Pelanggaran Siswa</h4>
+                                <p class="text-muted small m-0">Laporkan tindakan indisipliner siswa dengan filter kelas & bukti foto</p>
+                            </div>
+                        </div>
+                        <div id="wadahFormLaporGuru"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="adminSection" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm border border-success border-opacity-25">
+                <div class="d-flex align-items-center">
+                    <i class="fa-solid fa-sliders text-primary-green fs-4 me-3"></i>
+                    <div>
+                        <h6 class="fw-bold m-0 text-dark" id="judulMenuAktif">Dashboard & Grafik</h6>
+                        <small class="text-muted">Navigasi Panel Kontrol Admin</small>
+                    </div>
+                </div>
+                <button class="btn btn-primary-green px-4 py-2 rounded-pill fw-bold shadow-sm d-flex align-items-center" type="button" data-bs-toggle="offcanvas" data-bs-target="#slidePanelAdmin">
+                    <i class="fa-solid fa-bars me-2 fs-5"></i> Menu Panel Admin
+                </button>
+            </div>
+
+            <div class="offcanvas offcanvas-start rounded-end-4 border-0 shadow-lg" tabindex="-1" id="slidePanelAdmin">
+                <div class="offcanvas-header bg-primary-green text-white pb-3">
+                    <div class="d-flex align-items-center">
+                        <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="30" class="me-2" alt="Logo">
+                        <h5 class="offcanvas-title fw-bold m-0">Panel Kontrol</h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+                </div>
+                <div class="offcanvas-body p-3 custom-sidebar bg-white d-flex flex-column justify-content-between">
+                    <ul class="nav flex-column nav-pills gap-1" id="adminTabs">
+                        <li class="nav-item"><a class="nav-link active" onclick="switchAdminTab('stats', 'Dashboard & Grafik')" href="#"><i class="fa-solid fa-chart-pie me-3 text-primary-green"></i>Dashboard & Grafik</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('verif', 'Antrean Laporan')" href="#"><i class="fa-solid fa-clipboard-check me-3 text-warning"></i>Antrean Laporan</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('lapor', 'Buat Laporan Baru')" href="#"><i class="fa-solid fa-plus-circle me-3 text-success"></i>Buat Laporan Baru</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('siswa', 'Kelola Siswa & SP')" href="#"><i class="fa-solid fa-users-gear me-3 text-info"></i>Kelola Siswa & SP</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('kamus', 'Kamus Pelanggaran')" href="#"><i class="fa-solid fa-book me-3 text-secondary"></i>Kamus Pelanggaran</a></li>
+                        <hr class="text-muted my-2">
+                        <li class="nav-item"><a class="nav-link text-danger fw-bold bg-danger bg-opacity-10" onclick="switchAdminTab('rekap', 'Rekap & Cetak PDF')" href="#"><i class="fa-solid fa-file-pdf me-3 text-danger"></i>Rekap & Cetak PDF</a></li>
+                    </ul>
+                    <div class="p-3 bg-light rounded-3 text-center border mt-auto">
+                        <small class="text-muted d-block mb-1">Sistem E-Disiplin v2.0</small>
+                        <span class="badge bg-success">SMK Ad-Da'Wah Jakarta</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div id="tabStats">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4"><div class="card bg-primary-green text-white shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-users me-2"></i>Total Siswa</h6><h2 id="statTotalSiswa" class="fw-bold mb-0">0</h2></div></div>
+                            <div class="col-md-4"><div class="card bg-warning text-dark shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-hourglass-half me-2"></i>Laporan Pending</h6><h2 id="statPending" class="fw-bold mb-0">0</h2></div></div>
+                            <div class="col-md-4"><div class="card bg-danger text-white shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-triangle-exclamation me-2"></i>Siswa Kritis (SP)</h6><h2 id="statKritis" class="fw-bold mb-0">0</h2></div></div>
+                        </div>
+
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white mb-4"><h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-layer-group text-primary-green me-2"></i>Jumlah Pelanggaran Per Kelas</h5><div class="row g-3" id="wadahCardKelas"></div></div>
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white"><h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-line text-primary-green me-2"></i>Tren Real-time Pelanggaran</h5><canvas id="chartPelanggaran" height="100"></canvas></div>
+                    </div>
+
+                   <div id="tabVerif" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white">
+                            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+                                <h5 class="fw-bold mb-0 text-dark">Antrean Verifikasi Laporan</h5>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-success fw-bold shadow-sm" onclick="setujuiSemuaLaporan()"><i class="fa-solid fa-check-double me-1"></i>Setujui Semua</button>
+                                    <button class="btn btn-sm btn-outline-success fw-bold" onclick="loadPending()"><i class="fa-solid fa-rotate me-1"></i>Refresh</button>
+                                </div>
+                            </div>
+                            <div class="card-body p-3"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Tanggal</th><th>Siswa (Kelas)</th><th>Pelanggaran & Kronologi</th><th>Pelapor</th><th>Bukti</th><th>Aksi Admin</th></tr></thead><tbody id="tbPending"></tbody></table></div></div>
+                        </div>
+                    </div>
+
+                    <div id="tabLapor" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white"><div class="card-header bg-primary-green text-white py-3"><h5 class="fw-bold mb-0"><i class="fa-solid fa-pen-to-square me-2"></i>Form Pelaporan Admin</h5></div><div class="card-body p-4"><div id="wadahFormLaporAdmin"></div></div></div>
+                    </div>
+
+                    <div id="tabSiswa" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white">
+                            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+                                <h5 class="fw-bold mb-0 text-dark">Monitoring Poin & Data Siswa</h5>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary-green btn-sm fw-bold" onclick="bukaModalSiswa('tambah')"><i class="fa-solid fa-user-plus me-1"></i>Tambah Siswa Manual</button>
+                                    <button class="btn btn-warning btn-sm fw-bold text-dark" onclick="prosesTahunBaru()"><i class="fa-solid fa-arrow-up-right-dots me-1"></i>Kenaikan Kelas</button>
+                                </div>
+                            </div>
+                            
+                            <div class="card-body p-3 border-bottom bg-light">
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-5">
+                                        <select class="form-select form-select-sm fw-medium" id="filterSiswaKelas" onchange="filterTabelSiswa()">
+                                            <option value="">-- Tampilkan Semua Kelas --</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <select class="form-select form-select-sm fw-medium" id="filterSiswaSP" onchange="filterTabelSiswa()">
+                                            <option value="">-- Tampilkan Semua Status SP --</option>
+                                            <option value="Aman">Aman (Di bawah 50 Poin)</option>
+                                            <option value="SP 1">SP 1 (50 - 74 Poin)</option>
+                                            <option value="SP 2">SP 2 (75 - 99 Poin)</option>
+                                            <option value="SP 3">SP 3 (100+ Poin / Kritis)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button class="btn btn-sm btn-secondary w-100 fw-bold" onclick="resetFilterSiswa()"><i class="fa-solid fa-filter-circle-xmark me-1"></i>Reset</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-body p-3"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>NISN</th><th>Nama Siswa</th><th>Kelas</th><th>Total Poin</th><th>Status SP</th><th>Aksi</th></tr></thead><tbody id="tbAllSiswa"></tbody></table></div></div>
+                        </div>
+                    </div>
+
+                    <div id="tabKamus" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white">
+                            <div class="card-header bg-white py-3 border-bottom"><h5 class="fw-bold mb-0 text-dark">Daftar Kamus Pelanggaran & Bobot Poin</h5></div>
+                            <div class="card-body p-3">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" style="min-width: 650px;">
+                                        <thead class="table-light"><tr><th style="width: 10%;">Kode</th><th style="width: 45%;">Nama Pelanggaran</th><th style="width: 15%;">Bobot Poin</th><th style="width: 30%;">Sanksi / Tindakan</th></tr></thead>
+                                        <tbody id="tbKamus"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tabRekap" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white">
+                            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-file-pdf text-danger me-2"></i>Rekapitulasi & Cetak Laporan PDF</h5>
+                                <span class="badge bg-light text-dark border">Format Resmi A4</span>
+                            </div>
+                            <div class="card-body p-4">
+                                <div class="row g-3 mb-4 bg-light p-3 rounded-3 border align-items-end">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-bold small text-secondary">PILIH KELAS</label>
+                                        <select class="form-select fw-medium rounded-3" id="filterRekapKelas" onchange="tampilkanPreviewRekap()">
+                                            <option value="">-- Pilih Kelas --</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-bold small text-secondary">BULAN LAPORAN</label>
+                                        <select class="form-select fw-medium rounded-3" id="filterRekapBulan" onchange="tampilkanPreviewRekap()">
+                                            <option value="Januari">Januari</option><option value="Februari">Februari</option>
+                                            <option value="Maret">Maret</option><option value="April">April</option>
+                                            <option value="Mei">Mei</option><option value="Juni">Juni</option>
+                                            <option value="Juli">Juli</option><option value="Agustus">Agustus</option>
+                                            <option value="September">September</option><option value="Oktober">Oktober</option>
+                                            <option value="November">November</option><option value="Desember">Desember</option>
+                                            <option value="Semua Bulan">Semua Bulan (1 Semester / Tahun)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <button type="button" class="btn btn-danger w-100 py-2 rounded-3 fw-bold shadow-sm d-flex align-items-center justify-content-center" onclick="unduhPDFRekap()">
+                                            <i class="fa-solid fa-file-arrow-down me-2"></i>Unduh PDF Resmi
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <div id="areaCetakPDF" class="p-4 bg-white border rounded-3 text-dark mx-auto shadow-sm" style="min-width: 700px; font-family: 'Times New Roman', Times, serif; color: #000 !important;">
+                                        <div class="text-center border-bottom border-dark border-3 pb-2 mb-3">
+                                            <img src="https://i.ibb.co.com/LXG3HPx2/kop.png" alt="Kop Surat SMK Ad-Da'Wah" style="width: 100%; max-height: 140px; object-fit: contain;">
+                                        </div>
+
+                                        <div class="text-center mb-4 mt-3">
+                                            <h5 class="fw-bold text-decoration-underline mb-1" style="font-size: 16px;">CATATAN LAPORAN & AKUMULASI PELANGGARAN SISWA</h5>
+                                            <span class="fw-bold d-block" style="font-size: 13px;">KELAS: <span id="lblRekapKelas">...</span> | PERIODE BULAN: <span id="lblRekapBulan">...</span> <span id="lblRekapTahun">2026</span></span>
+                                        </div>
+
+                                        <table class="table table-bordered border-dark table-sm align-middle mb-4 text-dark" style="font-size: 12px; border-color: #000 !important;">
+                                            <thead class="text-center" style="background-color: #f0f0f0 !important; color: #000 !important;">
+                                                <tr>
+                                                    <th style="width: 5%; border-color: #000 !important;">No</th>
+                                                    <th style="width: 13%; border-color: #000 !important;">Tanggal</th>
+                                                    <th style="width: 20%; border-color: #000 !important;">Nama Siswa (NISN)</th>
+                                                    <th style="width: 37%; border-color: #000 !important;">Pelanggaran & Kronologi</th>
+                                                    <th style="width: 10%; border-color: #000 !important;">Poin</th>
+                                                    <th style="width: 15%; border-color: #000 !important;">Bukti Foto</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbRekapSiswaPDF" style="border-color: #000 !important;">
+                                                <tr><td colspan="6" class="text-center py-4 text-muted">Silakan pilih kelas terlebih dahulu pada filter di atas...</td></tr>
+                                            </tbody>
+                                        </table>
+
+                                        <div class="row mt-5 pt-3 text-center text-dark" style="font-size: 13px; page-break-inside: avoid;">
+                                            <div class="col-6">
+                                                <p class="mb-5">Mengetahui,<br><b>Wali Kelas <span id="lblttdKelas">...</span></b></p>
+                                                <p class="fw-bold text-decoration-underline mb-0 mt-4">( ............................................ )</p>
+                                                <small>NIP / NUPTK.</small>
+                                            </div>
+                                            <div class="col-6">
+                                                <p class="mb-5">Jakarta, <span id="tglCetakSekarang">...</span><br><b>Guru BK / Kesiswaan</b></p>
+                                                <p class="fw-bold text-decoration-underline mb-0 mt-4">( ............................................ )</p>
+                                                <small>NIP / NUPTK.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalAlertBS" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content rounded-4 border-0 shadow-lg text-center p-3">
+          <div class="modal-body">
+            <i id="alertIconBS" class="fa-solid fa-circle-check text-success fs-1 mb-3"></i>
+            <h5 class="fw-bold mb-2 text-dark" id="alertTitleBS">Berhasil!</h5>
+            <p class="text-muted small mb-4" id="alertTextBS">Pesan sistem muncul di sini.</p>
+            <button type="button" class="btn btn-primary-green px-4 fw-bold w-100 rounded-pill" data-bs-dismiss="modal">Tutup</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="modalConfirmBS" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content rounded-4 border-0 shadow-lg text-center p-3">
+          <div class="modal-body">
+            <i class="fa-solid fa-triangle-exclamation text-warning fs-1 mb-3"></i>
+            <h5 class="fw-bold mb-2 text-dark">Konfirmasi</h5>
+            <p class="text-muted small mb-4" id="confirmTextBS">Apakah Anda yakin ingin melanjutkan?</p>
+            <div class="d-flex gap-2 justify-content-center">
+              <button type="button" class="btn btn-light border px-3 fw-bold w-50 rounded-pill" data-bs-dismiss="modal">Batal</button>
+              <button type="button" class="btn btn-danger px-3 fw-bold w-50 rounded-pill" id="btnConfirmYesBS">Ya, Lanjut!</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="modalSiswa" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-primary-green text-white"><h5 class="modal-title fw-bold" id="judulModalSiswa">Tambah Siswa</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editNisnLama">
+                    <div class="mb-3"><label class="form-label fw-bold">NISN</label><input type="number" class="form-control" id="formNisn" required></div>
+                    <div class="mb-3"><label class="form-label fw-bold">Nama Lengkap</label><input type="text" class="form-control" id="formNama" required></div>
+                    <div class="mb-3"><label class="form-label fw-bold">Kelas</label><input type="text" class="form-control" id="formKelas" placeholder="Contoh: X-RPL-1" required></div>
+                    <div class="mb-3"><label class="form-label fw-bold">Password</label><input type="text" class="form-control" id="formPassword" value="123456" required></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary-green" onclick="simpanSiswaManual()">Simpan Data</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalEditLapor" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-primary-green text-white"><h5 class="modal-title fw-bold">Edit Laporan Pelanggaran</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editIdLog">
+                    <div class="mb-3"><label class="form-label fw-bold">Kode Pelanggaran Baru</label><input type="text" class="form-control" id="editKodeLapor" required></div>
+                    <div class="mb-3"><label class="form-label fw-bold">Keterangan / Kronologi Baru</label><textarea class="form-control" id="editKetLapor" rows="3" required></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-primary-green" onclick="simpanEditLaporan()">Simpan Perubahan</button></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+</body>
+</html>
