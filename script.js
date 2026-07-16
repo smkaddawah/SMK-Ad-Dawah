@@ -1320,11 +1320,13 @@ async function panggilAPI(payload) {
       return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
     }
     if (aksi === "get_absen_hari_ini") {
-        let tglHariIni = new Date().toISOString().split('T')[0];
-        const { data } = await supabaseClient.from('log_absensi')
-            .select('*').eq('username', payload.username).eq('tanggal', tglHariIni).single();
-        return { status: "sukses", data: data || null };
-    }
+            let tglHariIni = new Date().toISOString().split('T')[0];
+            // REVISI: Menggunakan maybeSingle() agar tidak error jika data belum ada
+            const { data, error } = await supabaseClient.from('log_absensi')
+                .select('*').eq('username', payload.username).eq('tanggal', tglHariIni).maybeSingle();
+            
+            return { status: "sukses", data: data || null };
+        }
 
     if (aksi === "get_log_absen_personal") {
         const { data } = await supabaseClient.from('log_absensi').select('*').eq('username', payload.username).order('tanggal', { ascending: false });
@@ -1351,33 +1353,33 @@ async function panggilAPI(payload) {
     }
 
     if (aksi === "catat_absen") {
-        let waktuSekarang = new Date().toLocaleTimeString('it-IT'); // Format HH:MM:SS
-        let tglHariIni = new Date().toISOString().split('T')[0];
+            let waktuSekarang = new Date().toLocaleTimeString('it-IT'); // Format HH:MM:SS
+            let tglHariIni = new Date().toISOString().split('T')[0];
 
-        // Cek apakah user valid
-        const { data: userData } = await supabaseClient.from('users').select('*').eq('username', payload.username).single();
-        if (!userData) return { status: "gagal", pesan: "QR tidak dikenali (Bukan Siswa/Guru sekolah ini)." };
+            // REVISI: Gunakan maybeSingle() untuk mencari user
+            const { data: userData } = await supabaseClient.from('users').select('*').eq('username', payload.username).maybeSingle();
+            if (!userData) return { status: "gagal", pesan: "QR tidak dikenali (Bukan Siswa/Guru sekolah ini)." };
 
-        // Cek log absensi hari ini
-        const { data: logHariIni } = await supabaseClient.from('log_absensi')
-            .select('*').eq('username', payload.username).eq('tanggal', tglHariIni).single();
+            // REVISI: Gunakan maybeSingle() untuk mengecek absen hari ini
+            const { data: logHariIni } = await supabaseClient.from('log_absensi')
+                .select('*').eq('username', payload.username).eq('tanggal', tglHariIni).maybeSingle();
 
-        if (!logHariIni) {
-            // Belum absen masuk -> Buat Record Masuk
-            await supabaseClient.from('log_absensi').insert([{
-                tanggal: tglHariIni, waktu_masuk: waktuSekarang, username: payload.username, role: userData.role
-            }]);
-            return { status: "sukses", kondisi: "masuk", waktu: waktuSekarang, user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
-        } else if (logHariIni && !logHariIni.waktu_pulang) {
-            // Sudah masuk, belum pulang -> Update Record Pulang
-            await supabaseClient.from('log_absensi').update({ waktu_pulang: waktuSekarang })
-                .eq('id', logHariIni.id);
-            return { status: "sukses", kondisi: "pulang", waktu: waktuSekarang, user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
-        } else {
-            // Sudah masuk dan pulang
-            return { status: "sukses", kondisi: "sudah_absen", user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
+            if (!logHariIni) {
+                // Belum absen masuk -> Buat Record Masuk
+                await supabaseClient.from('log_absensi').insert([{
+                    tanggal: tglHariIni, waktu_masuk: waktuSekarang, username: payload.username, role: userData.role
+                }]);
+                return { status: "sukses", kondisi: "masuk", waktu: waktuSekarang, user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
+            } else if (logHariIni && !logHariIni.waktu_pulang) {
+                // Sudah masuk, belum pulang -> Update Record Pulang
+                await supabaseClient.from('log_absensi').update({ waktu_pulang: waktuSekarang })
+                    .eq('id', logHariIni.id);
+                return { status: "sukses", kondisi: "pulang", waktu: waktuSekarang, user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
+            } else {
+                // Sudah masuk dan pulang
+                return { status: "sukses", kondisi: "sudah_absen", user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
+            }
         }
-    }
 
     if (aksi === "get_all_guru") {
             const { data } = await supabaseClient.from('users').select('*').in('role', ['guru', 'walikelas']).order('nama_lengkap', { ascending: true });
