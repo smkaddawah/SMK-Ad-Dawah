@@ -4,10 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem E-Disiplin - SMK Ad-Da'Wah</title>
+    
+    <!-- Pustaka CSS & Ikon -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Pustaka JavaScript Eksternal -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- PUSTAKA SUPABASE (DITAMBAHKAN) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
     <link rel="stylesheet" href="style.css">
     <style>
       .card-stat { transition: transform 0.2s; border-radius: 15px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
@@ -52,6 +62,7 @@
                                 <option value="siswa">Siswa (Cek Poin)</option>
                                 <option value="guru">Guru (Kirim Laporan)</option>
                                 <option value="admin">Admin (Kesiswaan)</option>
+                                <option value="walikelas">Wali Kelas</option>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -69,53 +80,162 @@
         </div>
 
         <div id="siswaSection" style="display: none;">
-            <div class="row g-4 mb-4">
-                <div class="col-md-5">
-                    <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100 bg-white">
-                        <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="85" class="mx-auto mb-3" alt="Logo">
-                        <h4 class="fw-bold text-dark mb-1">SMK Ad-Da'Wah Jakarta</h4>
-                        <p class="text-muted mb-0">Portal Disiplin Peserta Didik</p>
-                        <hr>
-                        <span class="badge bg-success fs-6 px-3 py-2 rounded-pill" id="siswaStatus">Aman (Berkelakuan Baik)</span>
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 rounded-4 bg-white p-3">
+                        <div class="text-center mb-3">
+                            <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="60" alt="Logo">
+                            <h6 class="fw-bold mt-2 mb-0">Panel Siswa</h6>
+                        </div>
+                        <ul class="nav flex-column nav-pills gap-2" id="siswaTabs">
+                            <li class="nav-item"><a class="nav-link active" onclick="switchSiswaTab('profil')" href="#"><i class="fa-solid fa-qrcode me-2"></i>Profil & QR Absen</a></li>
+                            <li class="nav-item"><a class="nav-link" onclick="switchSiswaTab('logabsen')" href="#"><i class="fa-solid fa-calendar-check me-2"></i>Log Absensi</a></li>
+                            <li class="nav-item"><a class="nav-link text-danger" onclick="switchSiswaTab('pelanggaran')" href="#"><i class="fa-solid fa-triangle-exclamation me-2"></i>Log Pelanggaran</a></li>
+                        </ul>
                     </div>
                 </div>
-                <div class="col-md-7">
-                    <div class="card shadow-sm border-0 rounded-4 p-4 bg-white h-100 d-flex flex-column justify-content-center">
-                        <div class="text-center">
-                            <h6 class="text-secondary uppercase fw-semibold mb-2">Total Akumulasi Poin Anda</h6>
-                            <h1 id="siswaPoin" class="display-1 fw-bold text-danger mb-0">0</h1>
-                            <p class="text-muted small mt-2">Maksimal toleransi: 150 Poin</p>
-                            <p class="text-muted small mb-0 px-3"><i class="fa-solid fa-circle-info me-1"></i>Poin akan di-reset otomatis pada awal tahun ajaran baru.</p>
+                <div class="col-md-9">
+                    <div id="siswaTabProfil">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100 bg-white">
+                                    <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" width="100" class="mx-auto mb-3 rounded-circle border" alt="Foto Profil">
+                                    <h5 class="fw-bold text-dark mb-0" id="lblNamaSiswaQR">Nama Siswa</h5>
+                                    <p class="text-muted mb-2">NISN: <span id="lblNisnSiswaQR">...</span> | Kelas: <span id="lblKelasSiswaQR">...</span></p>
+                                    <div class="d-flex justify-content-center bg-light p-3 rounded-3 mb-3">
+                                        <div id="qrCodeSiswa"></div> </div>
+                                    <div id="statusAbsenSiswa" class="alert alert-secondary py-2 mb-0 fw-bold">Belum Absen Hari Ini</div>
+                                </div>
+                            </div>
+                            <div class="col-md-7">
+                                <div class="card shadow-sm border-0 rounded-4 p-4 bg-white h-100 d-flex flex-column justify-content-center text-center">
+                                    <h6 class="text-secondary uppercase fw-semibold mb-2">Total Akumulasi Poin Pelanggaran</h6>
+                                    <h1 id="siswaPoin" class="display-1 fw-bold text-danger mb-0">0</h1>
+                                    <div class="mt-3"><span class="badge bg-success fs-6 px-3 py-2 rounded-pill" id="siswaStatus">Aman</span></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
-                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left text-primary-green me-2"></i>📋 Catatan Riwayat Pelanggaran Anda</h5>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr><th>Tanggal</th><th>Jenis Pelanggaran</th><th>Poin</th><th>Pelapor</th><th>Bukti</th></tr>
-                        </thead>
-                        <tbody id="tbRiwayatSiswa"></tbody>
-                    </table>
+                    <div id="siswaTabLogAbsen" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-calendar-check text-primary-green me-2"></i>Riwayat Absensi Anda</h5>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Tanggal</th><th>Waktu Masuk</th><th>Waktu Pulang</th><th>Status</th></tr></thead><tbody id="tbRiwayatAbsenSiswa"></tbody></table>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="siswaTabPelanggaran" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-danger me-2"></i>Detail Riwayat Pelanggaran</h5>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Tanggal</th><th>Jenis Pelanggaran</th><th>Poin</th><th>Pelapor</th><th>Bukti</th></tr></thead><tbody id="tbRiwayatSiswa"></tbody></table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div id="guruSection" style="display: none;">
-            <div class="row justify-content-center">
-                <div class="col-md-8">
-                    <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
-                        <div class="d-flex align-items-center mb-4 border-bottom pb-3">
-                            <i class="fa-solid fa-pen-to-square text-primary-green fs-3 me-3"></i>
-                            <div>
-                                <h4 class="fw-bold text-dark m-0">Form Pelaporan Pelanggaran Siswa</h4>
-                                <p class="text-muted small m-0">Laporkan tindakan indisipliner siswa dengan filter kelas & bukti foto</p>
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 rounded-4 bg-white p-3">
+                        <div class="text-center mb-3">
+                            <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="60" alt="Logo">
+                            <h6 class="fw-bold mt-2 mb-0">Panel Guru</h6>
+                        </div>
+                        <ul class="nav flex-column nav-pills gap-2" id="guruTabs">
+                            <li class="nav-item"><a class="nav-link active" onclick="switchGuruTab('profil')" href="#"><i class="fa-solid fa-qrcode me-2"></i>Profil & QR Absen</a></li>
+                            <li class="nav-item"><a class="nav-link" onclick="switchGuruTab('logabsen')" href="#"><i class="fa-solid fa-calendar-check me-2"></i>Log Absensi</a></li>
+                            <li class="nav-item"><a class="nav-link text-success" onclick="switchGuruTab('lapor')" href="#"><i class="fa-solid fa-pen-to-square me-2"></i>Form Pelaporan</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-9">
+                    <div id="guruTabProfil">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 text-center bg-white mx-auto" style="max-width: 400px;">
+                            <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" width="100" class="mx-auto mb-3 rounded-circle border" alt="Foto Profil">
+                            <h5 class="fw-bold text-dark mb-0" id="lblNamaGuruQR">Nama Guru</h5>
+                            <p class="text-muted mb-2">ID: <span id="lblIdGuruQR">...</span></p>
+                            <div class="d-flex justify-content-center bg-light p-3 rounded-3 mb-3">
+                                <div id="qrCodeGuru"></div>
+                            </div>
+                            <div id="statusAbsenGuru" class="alert alert-secondary py-2 mb-0 fw-bold">Belum Absen Hari Ini</div>
+                        </div>
+                    </div>
+                    <div id="guruTabLogAbsen" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-calendar-check text-primary-green me-2"></i>Riwayat Kehadiran Guru</h5>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Tanggal</th><th>Waktu Masuk</th><th>Waktu Pulang</th><th>Status</th></tr></thead><tbody id="tbRiwayatAbsenGuru"></tbody></table>
                             </div>
                         </div>
-                        <div id="wadahFormLaporGuru"></div>
+                    </div>
+                    <div id="guruTabLapor" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                            <h4 class="fw-bold text-dark mb-4 border-bottom pb-3"><i class="fa-solid fa-pen-to-square text-primary-green me-2"></i>Form Pelaporan Pelanggaran Siswa</h4>
+                            <div id="wadahFormLaporGuru"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= DASBOR WALI KELAS ================= -->
+        <div id="walikelasSection" style="display: none;">
+            <div class="row g-4">
+                <!-- Sidebar Wali Kelas -->
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 rounded-4 bg-white p-3">
+                        <div class="text-center mb-3">
+                            <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="60" alt="Logo">
+                            <h6 class="fw-bold mt-2 mb-0">Panel Wali Kelas</h6>
+                            <span class="badge bg-success" id="namaKelasWaliBadge">Kelas ...</span>
+                        </div>
+                        <ul class="nav flex-column nav-pills gap-2" id="walikelasTabs">
+                            <li class="nav-item"><a class="nav-link active" onclick="switchWaliTab('siswa')" href="#"><i class="fa-solid fa-users me-2"></i>Data & Poin Siswa</a></li>
+                            <li class="nav-item"><a class="nav-link" onclick="switchWaliTab('absensi')" href="#"><i class="fa-solid fa-calendar-days me-2"></i>Rekap Absensi Kelas</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <!-- Konten Wali Kelas -->
+                <div class="col-md-9">
+                    <!-- Tab Data Siswa (Yang Lama) -->
+                    <div id="waliTabSiswa">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-users text-primary-green me-2"></i>Data Siswa & Poin Pelanggaran</h5>
+                            <div id="wadahDataWali"></div> <!-- Tabel poin dimasukkan via walikelas.js -->
+                        </div>
+                    </div>
+                    <!-- Tab Absensi Kelas (Baru) -->
+                    <div id="waliTabAbsensi" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-calendar-check text-info me-2"></i>Rekap Absensi Kelas <span id="lblKelasAbsenWali"></span></h5>
+                            
+                            <div class="row g-2 mb-3 bg-light p-3 rounded-3 border">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Tanggal Mulai</label>
+                                    <input type="date" class="form-control" id="waliAbsenStart">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Tanggal Akhir</label>
+                                    <input type="date" class="form-control" id="waliAbsenEnd">
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end gap-2">
+                                    <button class="btn btn-primary w-100 fw-bold" onclick="loadAbsensiWaliKelas()"><i class="fa-solid fa-search me-1"></i> Cari</button>
+                                    <button class="btn btn-danger w-100 fw-bold" onclick="cetakPDFAbsensiWali()"><i class="fa-solid fa-file-pdf me-1"></i> PDF</button>
+                                </div>
+                            </div>
+
+                            <div id="areaCetakAbsenWali">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover align-middle mb-0 text-center">
+                                        <thead class="table-light"><tr><th>Tanggal</th><th>NISN</th><th>Nama Siswa</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr></thead>
+                                        <tbody id="tbAbsenWali"><tr><td colspan="6" class="text-muted">Pilih tanggal dan klik Cari.</td></tr></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -149,9 +269,13 @@
                         <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('verif', 'Antrean Laporan')" href="#"><i class="fa-solid fa-clipboard-check me-3 text-warning"></i>Antrean Laporan</a></li>
                         <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('lapor', 'Buat Laporan Baru')" href="#"><i class="fa-solid fa-plus-circle me-3 text-success"></i>Buat Laporan Baru</a></li>
                         <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('siswa', 'Kelola Siswa & SP')" href="#"><i class="fa-solid fa-users-gear me-3 text-info"></i>Kelola Siswa & SP</a></li>
+                        <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('guru', 'Kelola Guru & Wali Kelas')" href="#"><i class="fa-solid fa-chalkboard-user me-3 text-primary"></i>Kelola Guru & Wali Kelas</a></li>
                         <li class="nav-item"><a class="nav-link" onclick="switchAdminTab('kamus', 'Kamus Pelanggaran')" href="#"><i class="fa-solid fa-book me-3 text-secondary"></i>Kamus Pelanggaran</a></li>
                         <hr class="text-muted my-2">
                         <li class="nav-item"><a class="nav-link text-danger fw-bold bg-danger bg-opacity-10" onclick="switchAdminTab('rekap', 'Rekap & Cetak PDF')" href="#"><i class="fa-solid fa-file-pdf me-3 text-danger"></i>Rekap & Cetak PDF</a></li>
+                        <li class="nav-item"><a class="nav-link text-info fw-bold bg-info bg-opacity-10 mt-2" onclick="switchAdminTab('rekapabsen', 'Rekap Laporan Absensi')" href="#"><i class="fa-solid fa-calendar-days me-3 text-info"></i>Rekap Absensi (PDF)</a></li>
+                        <li class="nav-item"><a class="nav-link text-primary fw-bold" onclick="switchAdminTab('absensi', 'Sistem Absensi (Scan QR)')" href="#"><i class="fa-solid fa-qrcode me-3 text-primary"></i>Sistem Absensi (Scan QR)</a></li>
+<li class="nav-item"><a class="nav-link text-dark fw-bold" onclick="switchAdminTab('cetakqr', 'Cetak Kartu QR')" href="#"><i class="fa-solid fa-print me-3 text-dark"></i>Cetak Kartu QR</a></li>
                     </ul>
                     <div class="p-3 bg-light rounded-3 text-center border mt-auto">
                         <small class="text-muted d-block mb-1">Sistem E-Disiplin v2.0</small>
@@ -191,38 +315,93 @@
                     </div>
 
                     <div id="tabSiswa" style="display: none;">
+    <div class="card shadow-sm border-0 rounded-4 bg-white">
+        
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+            <h5 class="fw-bold mb-0 text-dark">Monitoring Poin & Data Siswa</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm fw-bold" onclick="bukaModalImport()">
+                    <i class="fa-solid fa-file-excel me-1"></i>Import Excel
+                </button>
+                <button class="btn btn-primary-green btn-sm fw-bold" onclick="bukaModalSiswa('tambah')">
+                    <i class="fa-solid fa-user-plus me-1"></i>Tambah Manual
+                </button>
+                <button class="btn btn-warning btn-sm fw-bold text-dark" onclick="prosesTahunBaru()">
+                    <i class="fa-solid fa-arrow-up-right-dots me-1"></i>Kenaikan Kelas
+                </button>
+            </div>
+        </div>
+        
+        <div class="card-body p-3 border-bottom bg-light">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-5">
+                    <select class="form-select form-select-sm fw-medium" id="filterSiswaKelas" onchange="filterTabelSiswa()">
+                        <option value="">-- Tampilkan Semua Kelas --</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <select class="form-select form-select-sm fw-medium" id="filterSiswaSP" onchange="filterTabelSiswa()">
+                        <option value="">-- Tampilkan Semua Status SP --</option>
+                        <option value="Aman">Aman (Di bawah 50 Poin)</option>
+                        <option value="SP 1">SP 1 (50 - 74 Poin)</option>
+                        <option value="SP 2">SP 2 (75 - 99 Poin)</option>
+                        <option value="SP 3">SP 3 (100+ Poin / Kritis)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-sm btn-secondary w-100 fw-bold" onclick="resetFilterSiswa()">
+                        <i class="fa-solid fa-filter-circle-xmark me-1"></i>Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-3">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th><input type="checkbox" id="selectAllSiswa" onclick="toggleSelectAll()"></th>
+                            <th>NISN</th>
+                            <th>Nama Siswa</th>
+                            <th>Kelas</th>
+                            <th>Total Poin</th>
+                            <th>Status SP</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbAllSiswa"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="tabGuru" style="display: none;">
                         <div class="card shadow-sm border-0 rounded-4 bg-white">
                             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
-                                <h5 class="fw-bold mb-0 text-dark">Monitoring Poin & Data Siswa</h5>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-primary-green btn-sm fw-bold" onclick="bukaModalSiswa('tambah')"><i class="fa-solid fa-user-plus me-1"></i>Tambah Siswa Manual</button>
-                                    <button class="btn btn-warning btn-sm fw-bold text-dark" onclick="prosesTahunBaru()"><i class="fa-solid fa-arrow-up-right-dots me-1"></i>Kenaikan Kelas</button>
+                                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chalkboard-user text-primary me-2"></i>Data Guru & Wali Kelas</h5>
+                                <button class="btn btn-primary btn-sm fw-bold" onclick="bukaModalGuru('tambah')">
+                                    <i class="fa-solid fa-user-plus me-1"></i>Tambah Guru/Wali Kelas
+                                </button>
+                            </div>
+                            <div class="card-body p-3">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>ID / NIP</th>
+                                                <th>Nama Lengkap</th>
+                                                <th>Peran (Role)</th>
+                                                <th>Kelas (Jika Wali)</th>
+                                                <th>Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbAllGuru"></tbody>
+                                    </table>
                                 </div>
                             </div>
-                            
-                            <div class="card-body p-3 border-bottom bg-light">
-                                <div class="row g-2 align-items-center">
-                                    <div class="col-md-5">
-                                        <select class="form-select form-select-sm fw-medium" id="filterSiswaKelas" onchange="filterTabelSiswa()">
-                                            <option value="">-- Tampilkan Semua Kelas --</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-5">
-                                        <select class="form-select form-select-sm fw-medium" id="filterSiswaSP" onchange="filterTabelSiswa()">
-                                            <option value="">-- Tampilkan Semua Status SP --</option>
-                                            <option value="Aman">Aman (Di bawah 50 Poin)</option>
-                                            <option value="SP 1">SP 1 (50 - 74 Poin)</option>
-                                            <option value="SP 2">SP 2 (75 - 99 Poin)</option>
-                                            <option value="SP 3">SP 3 (100+ Poin / Kritis)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <button class="btn btn-sm btn-secondary w-100 fw-bold" onclick="resetFilterSiswa()"><i class="fa-solid fa-filter-circle-xmark me-1"></i>Reset</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="card-body p-3"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>NISN</th><th>Nama Siswa</th><th>Kelas</th><th>Total Poin</th><th>Status SP</th><th>Aksi</th></tr></thead><tbody id="tbAllSiswa"></tbody></table></div></div>
                         </div>
                     </div>
 
@@ -317,6 +496,144 @@
                                 </div>
                         </div>
                     </div>
+
+                    <div id="tabAbsensi" style="display: none;">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <div class="card shadow-sm border-0 rounded-4 bg-white mb-3">
+                                    <div class="card-header bg-primary text-white py-3"><h5 class="fw-bold mb-0"><i class="fa-solid fa-camera me-2"></i>Scanner QR Code</h5></div>
+                                    <div class="card-body text-center p-3">
+                                        <input type="text" id="usbScannerInput" class="form-control mb-3 text-center" placeholder="Arahkan kursor ke sini jika pakai Scanner USB..." onkeypress="handleUSBScanner(event)">
+                                        <div id="reader" style="width: 100%; border-radius: 10px; overflow: hidden; border: 2px dashed #0d6efd;"></div>
+                                        <button class="btn btn-outline-primary mt-3 w-100 fw-bold" id="btnMulaiKamera" onclick="mulaiKamera()"><i class="fa-solid fa-video me-1"></i> Mulai Kamera Web/HP</button>
+                                    </div>
+                                </div>
+                                <div class="card shadow-sm border-0 rounded-4 bg-white">
+                                    <div class="card-body text-center p-4">
+                                        <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" id="scanFotoResult" width="90" class="rounded-circle border mb-3" alt="Profil">
+                                        <h5 class="fw-bold text-dark mb-0" id="scanNamaResult">-</h5>
+                                        <p class="text-muted mb-2">ID: <span id="scanIdResult">-</span> | KLS: <span id="scanKelasResult">-</span></p>
+                                        <div id="scanStatusResult" class="alert alert-secondary py-2 fw-bold mb-0">Menunggu Scan...</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-7">
+                                <div class="card shadow-sm border-0 rounded-4 bg-white h-100">
+                                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                                        <h5 class="fw-bold mb-0 text-dark">Log Absensi Hari Ini</h5>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="loadLogAbsenAdminHariIni()"><i class="fa-solid fa-rotate"></i></button>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Waktu</th><th>Nama (ID)</th><th>Peran</th><th>Status</th></tr></thead><tbody id="tbLogAbsenAdmin"></tbody></table></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+                    <div id="tabCetakQR" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white">
+                            <div class="card-header bg-dark text-white py-3"><h5 class="fw-bold mb-0"><i class="fa-solid fa-print me-2"></i>Pusat Cetak Kartu QR Code</h5></div>
+                            <div class="card-body p-4">
+                                <div class="row g-3 mb-4 bg-light p-3 rounded-3 border">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold small">Pilih Kategori</label>
+                                        <select class="form-select" id="cetakQrKategori" onchange="filterCetakQr()">
+                                            <option value="siswa">Seluruh Siswa (Per Kelas)</option>
+                                            <option value="guru">Seluruh Guru</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4" id="wadahCetakQrKelas">
+                                        <label class="form-label fw-bold small">Pilih Kelas</label>
+                                        <select class="form-select" id="cetakQrKelas"></select>
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-end gap-2">
+                                        <button class="btn btn-primary fw-bold w-100" onclick="tampilkanPreviewKartuQR()"><i class="fa-solid fa-eye me-1"></i> Tampilkan</button>
+                                        <button class="btn btn-danger fw-bold w-100" onclick="downloadPDFKartuQR()"><i class="fa-solid fa-file-pdf me-1"></i> Download PDF</button>
+                                    </div>
+                                </div>
+                                <div id="areaCetakKartuQR" class="row g-3 justify-content-center">
+                                    <div class="col-12 text-center text-muted py-5">Silakan pilih kategori dan klik Tampilkan.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB REKAP ABSENSI ADMIN -->
+                    <div id="tabRekapAbsen" style="display: none;">
+                        <div class="card shadow-sm border-0 rounded-4 bg-white">
+                            <div class="card-header bg-info text-white py-3"><h5 class="fw-bold mb-0"><i class="fa-solid fa-calendar-days me-2"></i>Rekap Laporan Absensi</h5></div>
+                            <div class="card-body p-4">
+                                <div class="row g-3 mb-4 bg-light p-3 rounded-3 border align-items-end">
+                                    <div class="col-md-2">
+                                        <label class="form-label small fw-bold">Jenis Rekap</label>
+                                        <select class="form-select" id="filterTipeRekapAbsen" onchange="aturInputRekapAbsen()">
+                                            <option value="harian">Harian</option>
+                                            <option value="mingguan">Mingguan / Rentang</option>
+                                            <option value="bulanan">Bulanan</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Input Harian -->
+                                    <div class="col-md-3" id="wrapAbsenHarian">
+                                        <label class="form-label small fw-bold">Pilih Tanggal</label>
+                                        <input type="date" class="form-control" id="inputAbsenHarian">
+                                    </div>
+                                    
+                                    <!-- Input Mingguan / Rentang -->
+                                    <div class="col-md-3" id="wrapAbsenRentang" style="display:none;">
+                                        <label class="form-label small fw-bold">Tgl Mulai - Akhir</label>
+                                        <div class="d-flex gap-1">
+                                            <input type="date" class="form-control px-1" id="inputAbsenStart">
+                                            <input type="date" class="form-control px-1" id="inputAbsenEnd">
+                                        </div>
+                                    </div>
+
+                                    <!-- Input Bulanan -->
+                                    <div class="col-md-3" id="wrapAbsenBulanan" style="display:none;">
+                                        <label class="form-label small fw-bold">Bulan & Tahun</label>
+                                        <input type="month" class="form-control" id="inputAbsenBulan">
+                                    </div>
+
+                                    <div class="col-md-2">
+                                        <label class="form-label small fw-bold">Kategori</label>
+                                        <select class="form-select" id="filterAbsenKategori" onchange="aturInputRekapAbsen()">
+                                            <option value="siswa">Siswa</option>
+                                            <option value="guru">Guru</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2" id="wrapAbsenKelas">
+                                        <label class="form-label small fw-bold">Kelas</label>
+                                        <select class="form-select" id="filterAbsenKelas"><option value="">Semua Kelas</option></select>
+                                    </div>
+                                    <div class="col-md-3 d-flex gap-2">
+                                        <button class="btn btn-primary fw-bold w-100" onclick="tampilkanRekapAbsen()"><i class="fa-solid fa-search me-1"></i> Cari</button>
+                                        <button class="btn btn-danger fw-bold w-100" onclick="downloadPDFAbsensiAdmin()"><i class="fa-solid fa-file-pdf me-1"></i> PDF</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" id="pencarianTabelAbsen" placeholder="Ketik nama atau NISN untuk mencari..." onkeyup="cariDiTabelAbsen()">
+                                </div>
+
+                                <div id="areaCetakRekapAbsen">
+                                    <div class="text-center mb-3" id="headerKopAbsen" style="display: none;">
+                                        <h4 class="fw-bold m-0">LAPORAN ABSENSI</h4>
+                                        <h6 class="m-0" id="subjudulLaporanAbsen">SMK AD-DA'WAH</h6>
+                                        <hr>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover align-middle mb-0 text-center" id="tabelRekapAbsenSistem">
+                                            <thead class="table-light"><tr><th>No</th><th>Tanggal</th><th>ID/NISN</th><th>Nama Lengkap</th><th>Kelas</th><th>Waktu Masuk</th><th>Waktu Pulang</th></tr></thead>
+                                            <tbody id="tbRekapAbsenAdmin"><tr><td colspan="7" class="text-muted py-4">Silakan atur filter dan klik Cari.</td></tr></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -381,8 +698,131 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalRiwayat" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-primary-green text-white">
+                <h5 class="modal-title fw-bold">Riwayat Pelanggaran Siswa</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="wadahRiwayat">
+                </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalImport" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-file-excel me-2"></i>Import Data (Siswa, Guru, Wali Kelas)</h5>
+                    <button type=\"button\" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    
+                    <div class="mb-4 p-3 bg-light border rounded-3">
+                        <label class="form-label fw-bold text-dark mb-2">1. Download Template Excel</label>
+                        <div class="input-group">
+                            <select class="form-select" id="pilihTemplate">
+                                <option value="siswa">Template Data Siswa</option>
+                                <option value="guru">Template Data Guru</option>
+                                <option value="walikelas">Template Data Wali Kelas</option>
+                            </select>
+                            <button class="btn btn-outline-success fw-bold" onclick="downloadTemplateExcel()"><i class="fa-solid fa-download me-1"></i> Unduh</button>
+                        </div>
+                        <small class="text-muted d-block mt-2">Gunakan format file ini agar sesuai dengan database sistem.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">2. Upload Data (Pilih Peran)</label>
+                        <select class="form-select mb-2" id="importRole" required>
+                            <option value="siswa">Data Siswa</option>
+                            <option value="guru">Data Guru</option>
+                            <option value="walikelas">Data Wali Kelas</option>
+                        </select>
+                        <input class="form-control" type="file" id="fileExcelImport" accept=".xlsx, .xls" required>
+                    </div>
+
+                    <div id="hasilImport" style="display: none;" class="mt-4">
+                        <h6 class="fw-bold border-bottom pb-2">Hasil Import:</h6>
+                        <p class="mb-1">Total Data Dibaca: <b id="lblTotal" class="text-primary">0</b></p>
+                        <p class="mb-1">Sukses Tersimpan: <b id="lblSukses" class="text-success">0</b></p>
+                        <p class="mb-1">Gagal (Duplikat/Kosong): <b id="lblGagal" class="text-danger">0</b></p>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    <button type="button" class="btn btn-success fw-bold" id="btnProsesImport" onclick="prosesImportExcel()">
+                        <i class="fa-solid fa-upload me-1"></i> Proses Import
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalGuru" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="judulModalGuru">Tambah Data Guru</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="guruMode">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">NIP / ID Guru (Username)</label>
+                        <input type="text" class="form-control" id="guruId" placeholder="Contoh: NIP12345" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nama Lengkap</label>
+                        <input type="text" class="form-control" id="guruNama" placeholder="Nama lengkap beserta gelar" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Peran (Role)</label>
+                        <select class="form-select" id="guruRole" onchange="aturFormWaliKelas()">
+                            <option value="guru">Guru Mata Pelajaran / Staff</option>
+                            <option value="walikelas">Wali Kelas</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="wadahGuruKelas" style="display: none;">
+                        <label class="form-label fw-bold">Pilih Kelas (Khusus Wali Kelas)</label>
+                        <select class="form-select" id="guruKelas">
+                            <option value="">-- Pilih Kelas --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Password Login</label>
+                        <input type="text" class="form-control" id="guruPassword" placeholder="Default: 123456" value="123456" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-primary fw-bold" id="btnSimpanGuru" onclick="simpanGuru()">Simpan Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
     <script src="script.js"></script>
+    <script src="walikelas.js"></script>
+    <script src="absensi.js"></script>
+    <script src="cetak_qr.js"></script>
+    <script src="rekap_absensi.js"></script>
+</body>
+</body>
 </body>
 </html>
