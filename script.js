@@ -267,8 +267,10 @@ async function handleLogin(e) {
     } else {
       showAlertBS("Login Gagal!", res.pesan, "error");
     }
-  } catch(err) { showAlertBS("Error Server", "Terjadi kesalahan koneksi sistem.", "error"); }
-  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-right-to-bracket me-2"></i>Masuk ke Sistem';
+ } catch(err) { 
+    console.error("ERROR LOGIN DETECTED:", err); // TAMBAHKAN INI
+    showAlertBS("Error Server", "Terjadi kesalahan koneksi sistem.", "error"); 
+  }
 }
 
 function aktifkanTampilanUser(res) {
@@ -316,48 +318,61 @@ function switchAdminTab(tab, judulMenu) {
     document.getElementById("judulMenuAktif").innerText = judulMenu;
   }
 
+  // Sembunyikan semua tab & hilangkan warna aktif
   document.querySelectorAll("#adminTabs .nav-link").forEach(el => el.classList.remove("active"));
   document.querySelectorAll("#adminSection div[id^='tab']").forEach(el => el.style.display = "none");
   
-  if (tab === 'stats') { document.querySelector("#adminTabs li:nth-child(1) a").classList.add("active"); document.getElementById("tabStats").style.display = "block"; loadStats(); }
-  if (tab === 'verif') { document.querySelector("#adminTabs li:nth-child(2) a").classList.add("active"); document.getElementById("tabVerif").style.display = "block"; loadPending(); }
-  if (tab === 'lapor') { document.querySelector("#adminTabs li:nth-child(3) a").classList.add("active"); document.getElementById("tabLapor").style.display = "block"; }
-  if (tab === 'siswa') { document.querySelector("#adminTabs li:nth-child(4) a").classList.add("active"); document.getElementById("tabSiswa").style.display = "block"; loadAllSiswa(); }
-  if (tab === 'kamus') { document.querySelector("#adminTabs li:nth-child(5) a").classList.add("active"); document.getElementById("tabKamus").style.display = "block"; loadKamus(); }
-  // Di dalam fungsi switchAdminTab(tab, judul) { ...
-  if (tab === 'rekapabsen') { document.querySelector("#adminTabs li:nth-child(10) a").classList.add("active"); document.getElementById("tabRekapAbsen").style.display = "block"; aturInputRekapAbsen(); }
-  if (tab === 'rekap') { 
-    document.querySelector("#adminTabs li:nth-child(7) a").classList.add("active"); 
-    document.getElementById("tabRekap").style.display = "block"; 
-    persiapkanMenuRekap(); 
+  // Berikan warna aktif pada menu yang diklik (Tanpa perlu repot menghitung urutan menu)
+  if (event && event.currentTarget) {
+      event.currentTarget.classList.add("active");
   }
-  if (tab === 'absensi') { document.querySelector("#adminTabs li:nth-child(8) a").classList.add("active"); document.getElementById("tabAbsensi").style.display = "block"; loadLogAbsenAdminHariIni(); }
-  if (tab === 'cetakqr') { document.querySelector("#adminTabs li:nth-child(9) a").classList.add("active"); document.getElementById("tabCetakQR").style.display = "block"; filterCetakQr(); }
-  if (tab === 'guru') { 
-        document.querySelector("#adminTabs li:nth-child(5) a").classList.add("active"); // Sesuaikan angka child jika warnanya tidak nyala
-        document.getElementById("tabGuru").style.display = "block"; 
-        loadAllGuru(); 
-    }
 
+  // Tampilkan konten sesuai ID
+  if (tab === 'stats') { document.getElementById("tabStats").style.display = "block"; loadStats(); }
+  if (tab === 'verif') { document.getElementById("tabVerif").style.display = "block"; loadPending(); }
+  if (tab === 'lapor') { document.getElementById("tabLapor").style.display = "block"; }
+  if (tab === 'siswa') { document.getElementById("tabSiswa").style.display = "block"; loadAllSiswa(); }
+  if (tab === 'kamus') { document.getElementById("tabKamus").style.display = "block"; loadKamus(); }
+  if (tab === 'guru') { document.getElementById("tabGuru").style.display = "block"; if(typeof loadAllGuru === 'function') loadAllGuru(); }
+  if (tab === 'rekap') { document.getElementById("tabRekap").style.display = "block"; persiapkanMenuRekap(); }
+  if (tab === 'absensi') { document.getElementById("tabAbsensi").style.display = "block"; if(typeof loadLogAbsenAdminHariIni === 'function') loadLogAbsenAdminHariIni(); }
+  if (tab === 'cetakqr') { document.getElementById("tabCetakQR").style.display = "block"; if(typeof filterCetakQr === 'function') filterCetakQr(); }
+  if (tab === 'rekapabsen') { document.getElementById("tabRekapAbsen").style.display = "block"; if(typeof aturInputRekapAbsen === 'function') aturInputRekapAbsen(); }
+
+  // Tutup sidebar otomatis di versi HP
   const slideEl = document.getElementById('slidePanelAdmin');
-  const slideInstance = bootstrap.Offcanvas.getInstance(slideEl);
-  if (slideInstance) slideInstance.hide();
+  if (slideEl) {
+      const slideInstance = bootstrap.Offcanvas.getInstance(slideEl);
+      if (slideInstance) slideInstance.hide();
+  }
 }
 
 function switchSiswaTab(tab) {
+    // 1. Reset semua class active
     document.querySelectorAll("#siswaTabs .nav-link").forEach(el => el.classList.remove("active"));
+    
+    // 2. Tampilkan/Sembunyikan konten
     document.getElementById("siswaTabProfil").style.display = tab === 'profil' ? 'block' : 'none';
     document.getElementById("siswaTabLogAbsen").style.display = tab === 'logabsen' ? 'block' : 'none';
     document.getElementById("siswaTabPelanggaran").style.display = tab === 'pelanggaran' ? 'block' : 'none';
-    event.currentTarget.classList.add("active");
+    
+    // 3. Pasang class active berdasarkan nama tab (bukan dari event klik)
+    const targetEl = document.querySelector(`#siswaTabs a[onclick*="${tab}"]`);
+    if (targetEl) targetEl.classList.add("active");
 }
 
 function switchGuruTab(tab) {
+    // 1. Reset semua class active
     document.querySelectorAll("#guruTabs .nav-link").forEach(el => el.classList.remove("active"));
+    
+    // 2. Tampilkan/Sembunyikan konten
     document.getElementById("guruTabProfil").style.display = tab === 'profil' ? 'block' : 'none';
     document.getElementById("guruTabLogAbsen").style.display = tab === 'logabsen' ? 'block' : 'none';
     document.getElementById("guruTabLapor").style.display = tab === 'lapor' ? 'block' : 'none';
-    event.currentTarget.classList.add("active");
+    
+    // 3. Pasang class active berdasarkan nama tab (bukan dari event klik)
+    const targetEl = document.querySelector(`#guruTabs a[onclick*="${tab}"]`);
+    if (targetEl) targetEl.classList.add("active");
 }
 
 // ================= 3. FILTER BERCABANG (CASCADING DROPDOWN) =================
@@ -730,11 +745,16 @@ async function loadRiwayatSiswa(nisn) {
   if (res.status === "sukses" && res.data.length > 0) {
     tb.innerHTML = res.data.map(r => `
       <tr>
-        <td>${new Date(r.tanggal).toLocaleDateString('id-ID')}</td><td><b>${r.namaPelanggaran}</b></td><td><span class="badge bg-danger">+${r.bobot}</span></td><td>${r.pelapor}</td>
-        <td>${r.bukti && r.bukti.startsWith('data:image') ? `<a href="${r.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image me-1"></i>Foto</a>` : 'Tidak ada foto'}</td>
+        <td>${new Date(r.tanggal).toLocaleDateString('id-ID')}</td>
+        <td><b>${r.namaPelanggaran}</b></td>
+        <td><span class="badge bg-danger">+${r.bobot}</span></td>
+        <td>${r.pelapor}</td>
+        <td>${r.bukti && (String(r.bukti).startsWith('data:image') || String(r.bukti).startsWith('http')) ? `<a href="${r.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image me-1"></i>Foto</a>` : 'Tidak ada foto'}</td>
       </tr>
     `).join("");
-  } else { tb.innerHTML = "<tr><td colspan='5' class='text-center text-muted py-3'>Belum ada riwayat pelanggaran. Pertahankan!</td></tr>"; }
+  } else { 
+      tb.innerHTML = "<tr><td colspan='5' class='text-center text-muted py-3'>Belum ada riwayat pelanggaran. Pertahankan!</td></tr>"; 
+  }
 }
 
 // ================= FITUR REKAP PDF TIAP KELAS =================
@@ -1121,7 +1141,7 @@ async function panggilAPI(payload) {
         .eq('username', payload.username)
         .eq('password', payload.password)
         .eq('role', payload.role)
-        .single();
+        .maybeSingle();
         
       if (error || !data) return { status: "gagal", pesan: "Username, Password, atau Peran tidak sesuai!" };
       
@@ -1477,4 +1497,53 @@ async function hapusTerpilih() {
             showAlertBS("Gagal", res.pesan, "error");
         }
     });
+}
+
+// ================= TAMBAHAN: FUNGSI LIHAT RIWAYAT UNTUK WALI KELAS =================
+async function tampilkanRiwayat(nisn) {
+    let oldModal = document.getElementById("modalDynamicRiwayat");
+    if(oldModal) oldModal.remove();
+
+    let modalHTML = `
+    <div class="modal fade" id="modalDynamicRiwayat" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-clock-rotate-left me-2"></i>Riwayat Pelanggaran: ${nisn}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light"><tr><th>Tanggal</th><th>Pelanggaran</th><th>Poin</th><th>Pelapor</th><th>Bukti</th></tr></thead>
+                            <tbody id="tbDynamicRiwayat">
+                                <tr><td colspan="5" class="text-center"><i class="fa-solid fa-spinner fa-spin me-2"></i>Memuat riwayat...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    let modalInstance = new bootstrap.Modal(document.getElementById("modalDynamicRiwayat"));
+    modalInstance.show();
+
+    const res = await panggilAPI({ aksi: "get_riwayat", nisn: nisn });
+    const tb = document.getElementById("tbDynamicRiwayat");
+    
+    if (res.status === "sukses" && res.data.length > 0) {
+        tb.innerHTML = res.data.map(r => `
+          <tr>
+            <td>${new Date(r.tanggal).toLocaleDateString('id-ID')}</td>
+            <td><b>${r.namaPelanggaran}</b></td>
+            <td><span class="badge bg-danger">+${r.bobot}</span></td>
+            <td>${r.pelapor}</td>
+            <td>${r.bukti && (String(r.bukti).startsWith('data:image') || String(r.bukti).startsWith('http')) ? `<a href="${r.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image me-1"></i>Foto</a>` : 'Tidak ada foto'}</td>
+          </tr>
+        `).join("");
+    } else {
+        tb.innerHTML = "<tr><td colspan='5' class='text-center text-muted py-3'>Siswa ini belum memiliki catatan pelanggaran.</td></tr>";
+    }
 }
