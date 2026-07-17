@@ -1432,36 +1432,41 @@ async function panggilAPI(payload) {
         }
 
     if (aksi === "get_rekap_absensi") {
-            let { startDate, endDate, kelas, roleTujuan } = payload;
-            
-            // 1. Ambil Log berdasarkan Tanggal
-            let queryLog = supabaseClient.from('log_absensi').select('*');
-            if (startDate && endDate) queryLog = queryLog.gte('tanggal', startDate).lte('tanggal', endDate);
-            const { data: logs } = await queryLog.order('tanggal', { ascending: true });
+        let { startDate, endDate, kelas, roleTujuan } = payload;
+        
+        let queryUser = supabaseClient.from('users').select('username, nama_lengkap, kelas, role');
+        if (roleTujuan) queryUser = queryUser.eq('role', roleTujuan);
+        if (kelas) queryUser = queryUser.eq('kelas', kelas);
+        const { data: users } = await queryUser;
 
-            if (!logs || logs.length === 0) return { status: "sukses", data: [] };
+        if (!users || users.length === 0) return { status: "sukses", data: [] };
 
-            // 2. Ambil User untuk menggabungkan Nama dan Kelas
-            let queryUser = supabaseClient.from('users').select('username, nama_lengkap, kelas, role');
-            if (roleTujuan) queryUser = queryUser.eq('role', roleTujuan);
-            if (kelas) queryUser = queryUser.eq('kelas', kelas);
-            const { data: users } = await queryUser;
+        let queryLog = supabaseClient.from('log_absensi').select('*');
+        if (startDate && endDate) queryLog = queryLog.gte('tanggal', startDate).lte('tanggal', endDate);
+        const { data: logs } = await queryLog;
 
-            // 3. Gabungkan Data (Inner Join versi aman)
-            let mapUser = {};
-            users.forEach(u => mapUser[u.username] = u);
-
-            let hasilFilter = logs
-                .filter(l => mapUser[l.username]) // Hanya tampilkan jika usernamenya ada di filter
-                .map(l => ({
-                    ...l,
-                    nama: mapUser[l.username].nama_lengkap,
-                    kelas: mapUser[l.username].kelas,
-                    role_user: mapUser[l.username].role
-                }));
-
-            return { status: "sukses", data: hasilFilter };
+        let hasilFilter = [];
+        let dStart = new Date(startDate);
+        let dEnd = new Date(endDate);
+        
+        // Looping semua hari dalam rentang, lalu looping semua siswa (Munculkan yang Alpa)
+        for (let d = new Date(dStart); d <= dEnd; d.setDate(d.getDate() + 1)) {
+            let tglStr = d.toISOString().split('T')[0];
+            users.forEach(u => {
+                let logUser = (logs || []).find(l => l.username === u.username && l.tanggal === tglStr);
+                if (logUser) {
+                    hasilFilter.push({ ...logUser, nama: u.nama_lengkap, kelas: u.kelas, role_user: u.role });
+                } else {
+                    // Siswa tidak absen (Alpa) tetap masuk ke tabel PDF & Excel
+                    hasilFilter.push({ 
+                        tanggal: tglStr, username: u.username, nama: u.nama_lengkap, 
+                        kelas: u.kelas, role_user: u.role, waktu_masuk: null, waktu_pulang: null 
+                    });
+                }
+            });
         }
+        return { status: "sukses", data: hasilFilter };
+    }
 
     return { status: "gagal", pesan: "Aksi tidak dikenali API" };
 
@@ -1545,5 +1550,67 @@ async function tampilkanRiwayat(nisn) {
         `).join("");
     } else {
         tb.innerHTML = "<tr><td colspan='5' class='text-center text-muted py-3'>Siswa ini belum memiliki catatan pelanggaran.</td></tr>";
+    }
+}
+
+// ================= FUNGSI MESIN EXCEL BORDER & TEKS =================
+function unduhExcelLengkap(dataArr, headers, filename, title, textColumnsIndex = []) {
+    let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+    <head>
+        <meta charset="utf-8">
+        <style>
+            table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 11pt; }
+            th, td { border: 1px solid #000000; padding: 6px; vertical-align: middle; }
+            th { background-color: #d9ead3; font-weight: bold; text-align: center; }
+            .text-col { mso-number-format: '\\@'; } /* Mencegah angka 00 hilang */
+        </style>
+    </head>
+    <body>
+        <h3 style="text-align: center; font-family: Arial, sans-serif;">${title}</h3>
+        <table>
+            <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>
+                ${dataArr.map((row) => `<tr>${
+                    row.map((val, cIdx) => {
+                        let isText = textColumnsIndex.includes(cIdx);
+                        return `<td ${isText ? 'class="text-col"' : ''}>${val !== null && val !== undefined ? val : '-'}</td>`;
+                    }).join('')
+                }</tr>`).join('')}
+            </tbody>
+        </table>
+    </body></html>`;
+
+    const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename + ".xls";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// ================= PERBAIKAN EXCEL PELANGGARAN ADMIN & WALI KELAS =================
+async function unduhExcelRekapPelanggaran(kelasOverride, bulanOverride) {
+    let kelasPilih = kelasOverride || document.getElementById("filterRekapKelas")?.value || document.getElementById("lblRekapKelas")?.innerText;
+    let bulanPilih = bulanOverride || document.getElementById("filterRekapBulan")?.value || "Semua Bulan";
+    
+    if (!kelasPilih || kelasPilih === "..." || kelasPilih === "") return showAlertBS("Perhatian", "Silakan pilih kelas terlebih dahulu!", "warning");
+    
+    showAlertBS("Memproses Excel...", "Mengambil data pelanggaran...", "info");
+    
+    const res = await panggilAPI({ aksi: "get_rekap_laporan", kelas: kelasPilih, bulan: bulanPilih });
+    
+    if (res.status === "sukses" && res.data.length > 0) {
+        let headers = ["No", "Tanggal", "NISN", "Nama Siswa", "Kelas", "Kode", "Pelanggaran", "Kronologi", "Poin"];
+        let dataArr = res.data.map((d, i) => [
+            i + 1, 
+            new Date(d.tanggal).toLocaleDateString('id-ID'),
+            d.nisn, d.namaSiswa, d.kelas, d.kode, d.namaPelanggaran, d.keterangan, d.poin
+        ]);
+        
+        // Memanggil Mesin Excel (Angka [2] artinya Kolom NISN wajib diformat Teks)
+        unduhExcelLengkap(dataArr, headers, `Rekap_Pelanggaran_Kelas_${kelasPilih}`, `REKAPITULASI PELANGGARAN KELAS ${kelasPilih} (${bulanPilih})`, [2]);
+    } else {
+        showAlertBS("Kosong", "Tidak ada data pelanggaran di kelas ini.", "warning");
     }
 }

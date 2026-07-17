@@ -85,24 +85,87 @@ function cariDiTabelAbsen() {
     });
 }
 
+// ================= PERBAIKAN PDF & EXCEL ABSENSI ADMIN =================
 function downloadPDFAbsensiAdmin() {
-    const area = document.getElementById("areaCetakRekapAbsen");
-    if(area.innerText.includes("Silakan atur filter") || area.innerText.includes("Tidak ada data")) {
+    const tb = document.getElementById("tbRekapAbsenAdmin");
+    if(tb.innerText.includes("Silakan atur filter") || tb.innerText.includes("Tidak ada data")) {
         showAlertBS("Perhatian", "Tampilkan data yang valid terlebih dahulu!", "warning"); return;
     }
+
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF.API.autoTable) {
+        showAlertBS("Memuat Mesin PDF...", "Sedang menyiapkan modul Teks Asli...", "info");
+        let script1 = document.createElement("script"); script1.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        script1.onload = () => {
+            let script2 = document.createElement("script"); script2.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js";
+            script2.onload = () => eksekusiCetakAbsenAdmin(); document.head.appendChild(script2);
+        };
+        document.head.appendChild(script1);
+    } else { eksekusiCetakAbsenAdmin(); }
+
+    function eksekusiCetakAbsenAdmin() {
+        showAlertBS("Menyimpan PDF", "Memproses laporan absensi (Teks Asli)...", "info");
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape agar lebih luas
+        let subjudul = document.getElementById("subjudulLaporanAbsen").innerText.replace(/\n/g, " - ");
+        
+        let imgKop = new Image(); imgKop.crossOrigin = "Anonymous"; imgKop.src = "https://i.ibb.co.com/LXG3HPx2/kop.png";
+        
+        let prosesPDF = function() {
+            try { doc.addImage(imgKop, 'PNG', 12, 10, 273, 32); doc.setLineWidth(0.6); doc.line(12, 44, 285, 44); } catch(e) {}
+            
+            doc.setFont("times", "bold"); doc.setFontSize(13);
+            doc.text("LAPORAN REKAPITULASI ABSENSI", 148.5, 52, { align: "center" });
+            doc.setFontSize(10); doc.setFont("times", "normal");
+            doc.text(subjudul, 148.5, 58, { align: "center" });
+
+            doc.autoTable({
+                html: '#tabelRekapAbsenSistem',
+                startY: 64, theme: 'grid',
+                styles: { font: 'times', fontSize: 9.5, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.2, halign: 'center', valign: 'middle' },
+                headStyles: { fillColor: [240, 240, 240], fontStyle: 'bold' },
+                columnStyles: { 3: { halign: 'left' } } 
+            });
+            
+            doc.save("Rekap_Absensi_Admin.pdf");
+        };
+        
+        if (imgKop.complete) prosesPDF(); else { imgKop.onload = prosesPDF; imgKop.onerror = prosesPDF; }
+    }
+}
+
+async function downloadExcelAbsensiAdmin() {
+    const tipe = document.getElementById("filterTipeRekapAbsen").value;
+    const kat = document.getElementById("filterAbsenKategori").value;
+    const kls = document.getElementById("filterAbsenKelas").value;
     
-    document.getElementById("headerKopAbsen").style.display = "block"; // Munculkan Kop Surat
-    showAlertBS("Memproses PDF", "Harap tunggu...", "info");
+    let start = "", end = "", teksJudul = "";
+    if (tipe === "harian") {
+        start = document.getElementById("inputAbsenHarian").value; end = start;
+        teksJudul = `Tanggal: ${new Date(start).toLocaleDateString('id-ID')}`;
+    } else if (tipe === "mingguan") {
+        start = document.getElementById("inputAbsenStart").value; end = document.getElementById("inputAbsenEnd").value;
+        teksJudul = `Periode: ${start} s/d ${end}`;
+    } else if (tipe === "bulanan") {
+        let bln = document.getElementById("inputAbsenBulan").value; 
+        let thn = bln.split("-")[0]; let bl = bln.split("-")[1];
+        start = `${thn}-${bl}-01`; let lastDay = new Date(thn, bl, 0).getDate(); end = `${thn}-${bl}-${lastDay}`;
+        teksJudul = `Bulan: ${bl} Tahun ${thn}`;
+    }
+
+    if(!start) return showAlertBS("Perhatian", "Atur filter tanggal terlebih dahulu!", "warning");
+    showAlertBS("Memproses Excel...", "Menyiapkan data absensi...", "info");
+
+    const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: start, endDate: end, kelas: kls, roleTujuan: kat });
     
-    const opt = {
-        margin: 10,
-        filename: `Rekap_Absensi.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    
-    html2pdf().set(opt).from(area).save().then(() => {
-        document.getElementById("headerKopAbsen").style.display = "none"; // Sembunyikan Kop Surat setelah selesai
-    });
+    if (res.status === "sukses" && res.data.length > 0) {
+        let headers = ["No", "Tanggal", "ID/NISN", "Nama Lengkap", "Kelas", "Masuk", "Pulang", "Status"];
+        let dataArr = res.data.map((d, i) => [
+            i + 1, new Date(d.tanggal).toLocaleDateString('id-ID'), d.username, d.nama, d.kelas || "-", 
+            d.waktu_masuk || "Belum Absen", d.waktu_pulang || "Belum Absen",
+            (d.waktu_masuk && d.waktu_pulang) ? "Selesai" : (d.waktu_masuk ? "Hanya Masuk" : "Tidak Hadir / Alpa")
+        ]);
+        
+        let judulAsli = `LAPORAN ABSENSI - ${teksJudul.toUpperCase()} - ${kat.toUpperCase()} ${kls ? 'KELAS ' + kls : ''}`;
+        unduhExcelLengkap(dataArr, headers, "Rekap_Absensi_Admin", judulAsli, [2]);
+    }
 }

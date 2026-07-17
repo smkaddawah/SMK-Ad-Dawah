@@ -14,11 +14,14 @@ async function initWaliKelas(namaKelas) {
     document.getElementById("lblKelasAbsenWali").innerText = namaKelas;
     
     // Tombol export poin
-    const wadah = document.getElementById("wadahDataWali");
+   const wadah = document.getElementById("wadahDataWali");
     wadah.innerHTML = `
-        <div class="mb-3">
-            <button class="btn btn-danger btn-sm" onclick="exportPdfWaliKelas('${namaKelas}')">
-                <i class="fa-solid fa-file-pdf me-1"></i> Export PDF Poin Kelas ${namaKelas}
+        <div class="mb-3 d-flex flex-wrap gap-2">
+            <button class="btn btn-danger btn-sm fw-bold" onclick="exportPdfWaliKelas('${namaKelas}')">
+                <i class="fa-solid fa-file-pdf me-1"></i> PDF Poin
+            </button>
+            <button class="btn btn-success btn-sm fw-bold" onclick="exportExcelWaliKelas('${namaKelas}')">
+                <i class="fa-solid fa-file-excel me-1"></i> Excel Poin
             </button>
         </div>
         <div id="tabelSiswaWali"></div>
@@ -69,6 +72,14 @@ async function exportPdfWaliKelas(namaKelas) {
         unduhPDFRekap(namaKelas, "Semua Bulan");
     } else {
         showAlertBS("Error", "Fungsi cetak rekap belum tersedia di script utama.", "error");
+    }
+}
+
+function exportExcelWaliKelas(namaKelas) {
+    if (typeof unduhExcelRekapPelanggaran === 'function') {
+        unduhExcelRekapPelanggaran(namaKelas, "Semua Bulan");
+    } else {
+        showAlertBS("Error", "Fungsi export belum siap.", "error");
     }
 }
 
@@ -125,37 +136,58 @@ async function tampilkanRiwayat(nisn) {
     }
 }
 
-// ================= FUNGSI ABSENSI KHUSUS WALI KELAS =================
+// ================= UPDATE TAMPILAN ABSENSI WALI KELAS =================
 async function loadAbsensiWaliKelas() {
     const tglMulai = document.getElementById("waliAbsenStart").value;
     const tglAkhir = document.getElementById("waliAbsenEnd").value;
     const tb = document.getElementById("tbAbsenWali");
 
     if(!tglMulai || !tglAkhir) { showAlertBS("Perhatian", "Pilih rentang tanggal terlebih dahulu!", "warning"); return; }
-    
-    tb.innerHTML = '<tr><td colspan="6" class="py-4"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data absensi...</td></tr>';
+    tb.innerHTML = '<tr><td colspan="6"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data absensi...</td></tr>';
 
-    const res = await panggilAPI({ 
-        aksi: "get_rekap_absensi", 
-        startDate: tglMulai, 
-        endDate: tglAkhir, 
-        kelas: globalKelasWali, 
-        roleTujuan: 'siswa' 
-    });
+    const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: tglMulai, endDate: tglAkhir, kelas: globalKelasWali, roleTujuan: 'siswa' });
 
     if (res.status === "sukses" && res.data.length > 0) {
-        tb.innerHTML = res.data.map(d => `
+        tb.innerHTML = res.data.map(d => {
+            let statusBadge = '<span class="badge bg-danger">Tidak Hadir / Alpa</span>';
+            if (d.waktu_masuk && d.waktu_pulang) statusBadge = '<span class="badge bg-success">Selesai</span>';
+            else if (d.waktu_masuk) statusBadge = '<span class="badge bg-primary">Masuk</span>';
+
+            return `
             <tr>
                 <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
                 <td>${d.username}</td>
                 <td class="text-start fw-bold">${d.nama}</td>
-                <td class="text-success fw-bold">${d.waktu_masuk || '-'}</td>
-                <td class="text-danger fw-bold">${d.waktu_pulang || '-'}</td>
-                <td><span class="badge bg-${d.waktu_pulang ? 'success' : 'primary'}">${d.waktu_pulang ? 'Selesai' : 'Hadir'}</span></td>
+                <td class="text-success">${d.waktu_masuk || '-'}</td>
+                <td class="text-danger">${d.waktu_pulang || '-'}</td>
+                <td>${statusBadge}</td>
             </tr>
-        `).join("");
+        `}).join("");
     } else {
-        tb.innerHTML = '<tr><td colspan="6" class="text-muted py-4">Tidak ada data absensi di tanggal tersebut.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="6" class="text-muted">Tidak ada data siswa.</td></tr>';
+    }
+}
+
+// ================= TAMBAHAN FITUR EXCEL =================
+async function cetakExcelAbsensiWali() {
+    const tglMulai = document.getElementById("waliAbsenStart").value;
+    const tglAkhir = document.getElementById("waliAbsenEnd").value;
+    if(!tglMulai || !tglAkhir) return showAlertBS("Perhatian", "Pilih tanggal dahulu!", "warning");
+
+    showAlertBS("Memproses Excel...", "Menyiapkan data absensi kelas...", "info");
+    const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: tglMulai, endDate: tglAkhir, kelas: globalKelasWali, roleTujuan: 'siswa' });
+
+    if (res.status === "sukses" && res.data.length > 0) {
+        let headers = ["No", "Tanggal", "NISN", "Nama Siswa", "Masuk", "Pulang", "Status"];
+        let dataArr = res.data.map((d, i) => [
+            i + 1, new Date(d.tanggal).toLocaleDateString('id-ID'), d.username, d.nama, 
+            d.waktu_masuk || "Belum Absen", d.waktu_pulang || "Belum Absen",
+            (d.waktu_masuk && d.waktu_pulang) ? "Selesai" : (d.waktu_masuk ? "Hanya Masuk" : "Tidak Hadir / Alpa")
+        ]);
+        
+        let judul = `REKAPITULASI ABSENSI KELAS ${globalKelasWali} (${tglMulai} s/d ${tglAkhir})`;
+        // Kolom [2] (NISN) diformat sebagai Teks
+        unduhExcelLengkap(dataArr, headers, `Absensi_Kelas_${globalKelasWali}`, judul, [2]); 
     }
 }
 
