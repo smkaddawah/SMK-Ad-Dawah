@@ -292,19 +292,59 @@ function aktifkanTampilanUser(res) {
         else { bdg.className = "badge bg-success fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "Aman (Berkelakuan Baik)"; }
     }
 
-    // Tampilkan detail nama, nisn, kelas di tab Profil
+    // --- MENGISI DATA KE TAMPILAN SHOW & TAMPILAN EDIT PROFIL ---
+    if (res.rawData) {
+        const d = res.rawData;
+        // 1. Tampilan BACA (Show)
+        if(document.getElementById("viewNisn")) document.getElementById("viewNisn").innerText = d.username || "-";
+        if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = d.nama_lengkap || "-";
+        if(document.getElementById("viewKelas")) document.getElementById("viewKelas").innerText = d.kelas || "-";
+        if(document.getElementById("viewJk")) document.getElementById("viewJk").innerText = d.jenis_kelamin === 'L' ? 'Laki-Laki' : (d.jenis_kelamin === 'P' ? 'Perempuan' : '-');
+        if(document.getElementById("viewTempatLahir")) document.getElementById("viewTempatLahir").innerText = d.tempat_lahir || "-";
+        if(document.getElementById("viewTglLahir")) document.getElementById("viewTglLahir").innerText = d.tanggal_lahir || "-";
+        if(document.getElementById("viewAgama")) document.getElementById("viewAgama").innerText = d.agama || "-";
+        if(document.getElementById("viewNoHp")) document.getElementById("viewNoHp").innerText = d.no_hp || "-";
+        if(document.getElementById("viewEmail")) document.getElementById("viewEmail").innerText = d.email || "-";
+        if(document.getElementById("viewAlamat")) document.getElementById("viewAlamat").innerText = d.alamat || "-";
+        if(document.getElementById("viewNamaAyah")) document.getElementById("viewNamaAyah").innerText = d.nama_ayah || "-";
+        if(document.getElementById("viewHpAyah")) document.getElementById("viewHpAyah").innerText = d.no_hp_ayah || "-";
+        if(document.getElementById("viewNamaIbu")) document.getElementById("viewNamaIbu").innerText = d.nama_ibu || "-";
+        if(document.getElementById("viewHpIbu")) document.getElementById("viewHpIbu").innerText = d.no_hp_ibu || "-";
+
+        // 2. Tampilan EDIT (Form)
+        if(document.getElementById("profNisn")) document.getElementById("profNisn").value = d.username || "";
+        if(document.getElementById("profNama")) document.getElementById("profNama").value = d.nama_lengkap || "";
+        if(document.getElementById("profKelas")) document.getElementById("profKelas").value = d.kelas || "";
+        if(document.getElementById("profJk")) document.getElementById("profJk").value = d.jenis_kelamin || "";
+        if(document.getElementById("profTempatLahir")) document.getElementById("profTempatLahir").value = d.tempat_lahir || "";
+        if(document.getElementById("profTglLahir")) document.getElementById("profTglLahir").value = d.tanggal_lahir || "";
+        if(document.getElementById("profAgama")) document.getElementById("profAgama").value = d.agama || "";
+        if(document.getElementById("profNoHp")) document.getElementById("profNoHp").value = d.no_hp || "";
+        if(document.getElementById("profEmail")) document.getElementById("profEmail").value = d.email || "";
+        if(document.getElementById("profAlamat")) document.getElementById("profAlamat").value = d.alamat || "";
+        if(document.getElementById("profNamaAyah")) document.getElementById("profNamaAyah").value = d.nama_ayah || "";
+        if(document.getElementById("profHpAyah")) document.getElementById("profHpAyah").value = d.no_hp_ayah || "";
+        if(document.getElementById("profNamaIbu")) document.getElementById("profNamaIbu").value = d.nama_ibu || "";
+        if(document.getElementById("profHpIbu")) document.getElementById("profHpIbu").value = d.no_hp_ibu || "";
+    }
+
+    // Tampilkan Nama, NISN & Foto Profil
     if(document.getElementById("txtNamaProfilSiswa")) document.getElementById("txtNamaProfilSiswa").innerText = res.nama;
     if(document.getElementById("txtNisnProfilSiswa")) document.getElementById("txtNisnProfilSiswa").innerText = res.identitas;
     if(document.getElementById("txtKelasProfilSiswa")) document.getElementById("txtKelasProfilSiswa").innerText = res.kelas || "-";
     
-    // Tampilkan Foto Profil (Jika kosong, pakai avatar inisial nama)
     const imgEl = document.getElementById("imgProfilSiswa");
     if (imgEl) {
         imgEl.src = res.foto_profil ? res.foto_profil : `https://ui-avatars.com/api/?name=${res.nama.replace(/\s/g, '+')}&background=198754&color=fff&size=200`;
     }
 
+    // Panggil fungsi-fungsi dasbor siswa
     if(typeof loadRiwayatSiswa === 'function') loadRiwayatSiswa(res.identitas);
     if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
+    
+    // PEMANGGILAN RIWAYAT IZIN YANG BENAR ADA DI SINI
+    if(typeof loadRiwayatIzinSiswa === 'function') loadRiwayatIzinSiswa(res.identitas);
+    
     if(typeof switchSiswaTab === 'function') switchSiswaTab('profil');
     
   } else if (res.role === "guru") {
@@ -377,6 +417,15 @@ function switchSiswaTab(tab) {
     // 3. Pasang class active berdasarkan nama tab (bukan dari event klik)
     const targetEl = document.querySelector(`#siswaTabs a[onclick*="${tab}"]`);
     if (targetEl) targetEl.classList.add("active");
+
+    const tabSiswaIzin = document.getElementById("siswaTabIzin");
+    if(tabSiswaIzin) tabSiswaIzin.style.display = tab === 'izin' ? 'block' : 'none';
+}
+
+// ================= FUNGSI GANTI MODE SHOW / EDIT PROFIL =================
+function toggleEditProfil(isEdit) {
+    document.getElementById("viewProfilSiswa").style.display = isEdit ? "none" : "block";
+    document.getElementById("editProfilSiswa").style.display = isEdit ? "block" : "none";
 }
 
 // ================= FITUR UPLOAD FOTO PROFIL SISWA =================
@@ -942,10 +991,12 @@ function downloadTemplateExcel() {
     let data;
     
     if (role === "siswa") {
-        data = [
-            { username: "0011223344", password: "123", nama_lengkap: "Budi Santoso", kelas: "X-RPL-1" },
-            { username: "0011223355", password: "123", nama_lengkap: "Siti Aminah", kelas: "X-RPL-1" }
-        ];
+        data = [{ 
+            username: "0011223344", password: "123", nama_lengkap: "Budi Santoso", kelas: "X-RPL-1",
+            jenis_kelamin: "L", tempat_lahir: "Jakarta", tanggal_lahir: "2010-01-01", 
+            agama: "Islam", alamat: "Jl. Merdeka No 1", no_hp: "08123456789", email: "budi@email.com", 
+            nama_ayah: "Parno", no_hp_ayah: "08111", nama_ibu: "Siti", no_hp_ibu: "08222"
+        }];
     } else if (role === "guru") {
         data = [
             { username: "NIP12345", password: "123", nama_lengkap: "Pak Riyadi" },
@@ -1007,9 +1058,20 @@ async function prosesImportExcel() {
                 if (user !== "" && nama !== "") {
                     barisValid.push({
                         username: user,
-                        password: pass === "" ? "123456" : pass, // Default password
+                        password: String(row.password || "123456").trim(),
                         nama_lengkap: nama,
-                        kelas: role === "guru" ? "0" : kls // Guru paksa ke 0
+                        kelas: role === "guru" ? "0" : String(row.kelas || "").trim(),
+                        jenis_kelamin: String(row.jenis_kelamin || "").trim(),
+                        tempat_lahir: String(row.tempat_lahir || "").trim(),
+                        tanggal_lahir: String(row.tanggal_lahir || "").trim(),
+                        agama: String(row.agama || "").trim(),
+                        alamat: String(row.alamat || "").trim(),
+                        no_hp: String(row.no_hp || "").trim(),
+                        email: String(row.email || "").trim(),
+                        nama_ayah: String(row.nama_ayah || "").trim(),
+                        no_hp_ayah: String(row.no_hp_ayah || "").trim(),
+                        nama_ibu: String(row.nama_ibu || "").trim(),
+                        no_hp_ibu: String(row.no_hp_ibu || "").trim()
                     });
                 }
             });
@@ -1157,14 +1219,21 @@ async function panggilAPI(payload) {
   const aksi = payload.aksi;
   try {
     if (aksi === "import_users") {
-      // 1. Ekstrak data dari file Excel (Payload)
-      let insertData = payload.data.map(item => ({
-          username: String(item.username),
-          password: String(item.password),
-          nama_lengkap: String(item.nama_lengkap),
-          role: payload.role,
-          kelas: item.kelas
-      }));
+        let insertData = payload.data.map(item => {
+            let obj = {
+                username: String(item.username),
+                password: String(item.password),
+                nama_lengkap: String(item.nama_lengkap),
+                role: payload.role,
+                kelas: item.kelas
+            };
+            // Tangkap semua kolom tambahan secara otomatis
+            const extraFields = ['jenis_kelamin', 'tempat_lahir', 'tanggal_lahir', 'agama', 'alamat', 'no_hp', 'email', 'nama_ayah', 'no_hp_ayah', 'nama_ibu', 'no_hp_ibu'];
+            extraFields.forEach(f => {
+                if (item[f] !== undefined && item[f] !== "") obj[f] = String(item[f]);
+            });
+            return obj;
+        });
 
       // 2. Cek Duplikasi: Cari username apa saja yang sudah ada di database
       let semuaUsernameDariExcel = insertData.map(u => u.username);
@@ -1208,13 +1277,16 @@ async function panggilAPI(payload) {
          const { data: logs } = await supabaseClient.from('log_pelanggaran').select('poin').eq('nisn', payload.username).eq('status', 'Disetujui');
          poin = logs ? logs.reduce((sum, l) => sum + (l.poin || 0), 0) : 0;
       }
-      return { status: "sukses", 
+      return { 
+          status: "sukses", 
           role: payload.role, 
           identitas: data.username, 
           nama: data.nama_lengkap, 
           kelas: data.kelas, 
           poin: poin,
-          foto_profil: data.foto_profil };
+          foto_profil: data.foto_profil,
+          rawData: data // <--- TAMBAHKAN INI AGAR SELURUH DATA TERBAWA
+      };
     }
 
     if (aksi === "get_form_data") {
@@ -1541,13 +1613,15 @@ async function panggilAPI(payload) {
     if (aksi === "get_rekap_absensi") {
         let { startDate, endDate, kelas, roleTujuan } = payload;
         
-        let queryUser = supabaseClient.from('users').select('username, nama_lengkap, kelas, role');
+        // 1. Tarik Data User + Jenis Kelamin
+        let queryUser = supabaseClient.from('users').select('username, nama_lengkap, kelas, role, jenis_kelamin');
         if (roleTujuan) queryUser = queryUser.eq('role', roleTujuan);
         if (kelas) queryUser = queryUser.eq('kelas', kelas);
         const { data: users } = await queryUser;
 
         if (!users || users.length === 0) return { status: "sukses", data: [] };
 
+        // 2. Tarik Log Absen
         let queryLog = supabaseClient.from('log_absensi').select('*');
         if (startDate && endDate) queryLog = queryLog.gte('tanggal', startDate).lte('tanggal', endDate);
         const { data: logs } = await queryLog;
@@ -1556,23 +1630,82 @@ async function panggilAPI(payload) {
         let dStart = new Date(startDate);
         let dEnd = new Date(endDate);
         
-        // Looping semua hari dalam rentang, lalu looping semua siswa (Munculkan yang Alpa)
+        // 3. Looping Matriks Tanggal & Deteksi H/S/I/A
         for (let d = new Date(dStart); d <= dEnd; d.setDate(d.getDate() + 1)) {
             let tglStr = d.toISOString().split('T')[0];
             users.forEach(u => {
                 let logUser = (logs || []).find(l => l.username === u.username && l.tanggal === tglStr);
+                
+                let statusHadir = 'A'; // Default ALPA jika tidak ada data sama sekali
+                let wMasuk = null, wPulang = null;
+                
                 if (logUser) {
-                    hasilFilter.push({ ...logUser, nama: u.nama_lengkap, kelas: u.kelas, role_user: u.role });
-                } else {
-                    // Siswa tidak absen (Alpa) tetap masuk ke tabel PDF & Excel
-                    hasilFilter.push({ 
-                        tanggal: tglStr, username: u.username, nama: u.nama_lengkap, 
-                        kelas: u.kelas, role_user: u.role, waktu_masuk: null, waktu_pulang: null 
-                    });
+                    wMasuk = logUser.waktu_masuk; wPulang = logUser.waktu_pulang;
+                    // Jika izin disetujui, ambil keterangan (S atau I)
+                    if (logUser.status_izin === 'Disetujui') {
+                        statusHadir = logUser.keterangan; 
+                    } else if (logUser.waktu_masuk) {
+                        statusHadir = 'H'; // Jika scan masuk, otomatis Hadir (H)
+                    }
                 }
+                
+                hasilFilter.push({ 
+                    tanggal: tglStr, username: u.username, nama: u.nama_lengkap, 
+                    kelas: u.kelas, role_user: u.role, jk: u.jenis_kelamin || '-',
+                    waktu_masuk: wMasuk, waktu_pulang: wPulang, status_hadir: statusHadir 
+                });
             });
         }
         return { status: "sukses", data: hasilFilter };
+    }
+
+    if (aksi === "update_profil_siswa") {
+        const { error } = await supabaseClient.from('users').update(payload.data).eq('username', payload.username);
+        return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
+    }
+
+    if (aksi === "ajukan_izin") {
+        const arr = payload.fotoBase64.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length; const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        const blob = new Blob([u8arr], { type: mime });
+        
+        const namaFile = `izin_${payload.username}_${new Date().getTime()}.jpg`;
+        await supabaseClient.storage.from('tempat-naro-foto').upload(namaFile, blob, { contentType: mime });
+        const { data: urlData } = supabaseClient.storage.from('tempat-naro-foto').getPublicUrl(namaFile);
+
+        const reqData = { username: payload.username, tanggal: payload.tanggal, role: 'siswa', keterangan: payload.keterangan, alasan: payload.alasan, bukti_foto: urlData.publicUrl, status_izin: 'Pending', pesan_tolak: null };
+        
+        const { data: exist } = await supabaseClient.from('log_absensi').select('id').eq('username', payload.username).eq('tanggal', payload.tanggal).maybeSingle();
+        if (exist) await supabaseClient.from('log_absensi').update(reqData).eq('id', exist.id);
+        else await supabaseClient.from('log_absensi').insert([reqData]);
+        
+        return { status: "sukses" };
+    }
+
+    if (aksi === "get_izin_siswa") {
+        const { data } = await supabaseClient.from('log_absensi').select('*').eq('username', payload.username).not('status_izin', 'is', null).order('tanggal', { ascending: false });
+        let hasil = (data || []).map(l => ({ tanggal: l.tanggal, tipe: l.keterangan === 'S' ? 'Sakit' : 'Izin', alasan: l.alasan, bukti: l.bukti_foto, status: l.status_izin, pesan: l.pesan_tolak }));
+        return { status: "sukses", data: hasil };
+    }
+
+    if (aksi === "get_antrean_izin_wali") {
+        const { data: users } = await supabaseClient.from('users').select('username, nama_lengkap').eq('kelas', payload.kelas);
+        if(!users || users.length === 0) return { status: "sukses", data: [] };
+        
+        const nisnList = users.map(u => u.username);
+        let mapUser = {}; users.forEach(u => mapUser[u.username] = u.nama_lengkap);
+
+        const { data: logs } = await supabaseClient.from('log_absensi').select('*').eq('status_izin', 'Pending').in('username', nisnList);
+        let hasil = (logs || []).map(l => ({ id: l.id, tanggal: l.tanggal, nisn: l.username, nama: mapUser[l.username], tipe: l.keterangan === 'S' ? 'Sakit' : 'Izin', alasan: l.alasan, bukti: l.bukti_foto }));
+        return { status: "sukses", data: hasil };
+    }
+
+    if (aksi === "update_status_izin") {
+        const { error } = await supabaseClient.from('log_absensi').update({ status_izin: payload.status, pesan_tolak: payload.pesan || null }).eq('id', payload.idLog);
+        return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
     }
 
     return { status: "gagal", pesan: "Aksi tidak dikenali API" };
@@ -1720,4 +1853,171 @@ async function unduhExcelRekapPelanggaran(kelasOverride, bulanOverride) {
     } else {
         showAlertBS("Kosong", "Tidak ada data pelanggaran di kelas ini.", "warning");
     }
+}
+
+// ================= SIMPAN PROFIL SISWA =================
+if (res.status === "sukses") {
+        showAlertBS("Berhasil", "Data diri berhasil diperbarui!", "success");
+        const p = payload.data;
+        
+        // Update Memori Lokal
+        currentUser.nama = p.nama_lengkap;
+        currentUser.kelas = p.kelas;
+        currentUser.rawData = { ...currentUser.rawData, ...p };
+        localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+        
+        // Update Nama & Kelas di Judul Utama
+        document.getElementById("txtNamaUser").innerText = `${currentUser.nama} (SISWA)`;
+        document.getElementById("txtNamaProfilSiswa").innerText = currentUser.nama;
+        document.getElementById("txtKelasProfilSiswa").innerText = currentUser.kelas;
+        
+        // Update Teks di Mode View secara Real-Time
+        document.getElementById("viewNama").innerText = p.nama_lengkap || "-";
+        document.getElementById("viewKelas").innerText = p.kelas || "-";
+        document.getElementById("viewJk").innerText = p.jenis_kelamin === 'L' ? 'Laki-Laki' : (p.jenis_kelamin === 'P' ? 'Perempuan' : '-');
+        document.getElementById("viewTempatLahir").innerText = p.tempat_lahir || "-";
+        document.getElementById("viewTglLahir").innerText = p.tanggal_lahir || "-";
+        document.getElementById("viewAgama").innerText = p.agama || "-";
+        document.getElementById("viewNoHp").innerText = p.no_hp || "-";
+        document.getElementById("viewEmail").innerText = p.email || "-";
+        document.getElementById("viewAlamat").innerText = p.alamat || "-";
+        document.getElementById("viewNamaAyah").innerText = p.nama_ayah || "-";
+        document.getElementById("viewHpAyah").innerText = p.no_hp_ayah || "-";
+        document.getElementById("viewNamaIbu").innerText = p.nama_ibu || "-";
+        document.getElementById("viewHpIbu").innerText = p.no_hp_ibu || "-";
+
+        // Tembak kembali ke Mode BACA (View)
+        toggleEditProfil(false);
+    } else {
+        showAlertBS("Gagal", res.pesan, "error");
+    }
+
+    // ================= FUNGSI PENGAJUAN IZIN SISWA =================
+function prosesFotoIzin(input) {
+    const file = input.files[0];
+    if(file) {
+        if(file.size > 2 * 1024 * 1024) { showAlertBS("Perhatian", "Foto maksimal 2 MB!", "warning"); input.value = ""; return; }
+        const reader = new FileReader();
+        reader.onloadend = () => document.getElementById("izinBuktiBase64").value = reader.result;
+        reader.readAsDataURL(file);
+    }
+}
+
+async function kirimPengajuanIzin(e) {
+    e.preventDefault();
+    const btn = document.getElementById("btnKirimIzin");
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Mengirim...'; btn.disabled = true;
+
+    const res = await panggilAPI({
+        aksi: "ajukan_izin",
+        username: currentUser.identitas,
+        tanggal: document.getElementById("izinTanggal").value,
+        keterangan: document.getElementById("izinKeterangan").value,
+        alasan: document.getElementById("izinAlasan").value,
+        fotoBase64: document.getElementById("izinBuktiBase64").value
+    });
+
+    if (res.status === "sukses") {
+        showAlertBS("Berhasil", "Pengajuan berhasil dikirim ke Wali Kelas!", "success");
+        e.target.reset(); document.getElementById("izinBuktiBase64").value = "";
+        loadRiwayatIzinSiswa(currentUser.identitas);
+    } else showAlertBS("Gagal", res.pesan, "error");
+    
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>Kirim Pengajuan'; btn.disabled = false;
+}
+
+async function loadRiwayatIzinSiswa(nisn) {
+    const tb = document.getElementById("tbRiwayatIzinSiswa");
+    const res = await panggilAPI({ aksi: "get_izin_siswa", username: nisn });
+    if (res.status === "sukses" && res.data.length > 0) {
+        tb.innerHTML = res.data.map(d => {
+            let bdg = d.status === 'Disetujui' ? 'bg-success' : (d.status === 'Ditolak' ? 'bg-danger' : 'bg-warning text-dark');
+            let msg = d.status === 'Ditolak' ? `<br><small class="text-danger fw-bold">Ditolak: ${d.pesan}</small>` : '';
+            return `<tr>
+                <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
+                <td><span class="badge bg-secondary">${d.tipe}</span></td>
+                <td class="text-start">${d.alasan} ${msg}</td>
+                <td><a href="${d.bukti}" target="_blank" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-image"></i></a></td>
+                <td><span class="badge ${bdg}">${d.status}</span></td>
+            </tr>`;
+        }).join("");
+    } else tb.innerHTML = `<tr><td colspan="5" class="text-muted">Belum ada pengajuan...</td></tr>`;
+}
+
+// ================= MESIN EXCEL MATRIKS ABSENSI (KE SAMPING) =================
+function exportExcelMatriksAbsensi(data, startDate, endDate, kelasPilih) {
+    if (!data || data.length === 0) return showAlertBS("Perhatian", "Tidak ada data untuk diexport", "warning");
+
+    // 1. Kumpulkan daftar tanggal unik (kolom ke samping)
+    let dates = []; let d = new Date(startDate); let end = new Date(endDate);
+    while(d <= end) { dates.push(d.toISOString().split('T')[0]); d.setDate(d.getDate() + 1); }
+
+    // 2. Kelompokkan data per Siswa (Nis, Nama, JK)
+    let mapSiswa = {};
+    data.forEach(r => {
+        if (!mapSiswa[r.username]) mapSiswa[r.username] = { nama: r.nama, nisn: r.username, jk: r.jk, absen: {} };
+        mapSiswa[r.username].absen[r.tanggal] = r.status_hadir; // H, A, S, I
+    });
+    // Urutkan sesuai abjad nama
+    let listSiswa = Object.values(mapSiswa).sort((a,b) => a.nama.localeCompare(b.nama));
+
+    // 3. Bangun Header Kolom Tanggal (Angkanya saja, misal 01, 02)
+    let thTanggal = dates.map(tgl => `<th>${tgl.split('-')[2]}</th>`).join("");
+
+    // 4. Bangun Baris Data Siswa (Matriks ke kanan)
+    let rowsHTML = listSiswa.map((s, i) => {
+        let tdAbsen = dates.map(tgl => `<td style="font-weight:bold; color: ${s.absen[tgl] === 'A' ? 'red' : 'black'};">${s.absen[tgl] || 'A'}</td>`).join("");
+        return `<tr>
+            <td>${i+1}</td>
+            <td class="text-col">${s.nisn}</td>
+            <td style="text-align: left;">${s.nama}</td>
+            <td>${s.jk}</td>
+            ${tdAbsen}
+        </tr>`;
+    }).join("");
+
+    // 5. Susun Layout HTML mirip dengan Foto Referensi Anda
+    let tableHtml = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+    <head>
+        <meta charset="utf-8">
+        <style>
+            table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; }
+            th, td { border: 1px solid #000000; padding: 4px; vertical-align: middle; text-align: center; }
+            th { background-color: #d9ead3; font-weight: bold; }
+            .text-col { mso-number-format: '\\@'; }
+            .judul { font-weight: bold; font-size: 14pt; text-align: center; border: none !important; }
+            .subjudul { font-weight: bold; font-size: 12pt; text-align: left; border: none !important; }
+            .no-border { border: none !important; }
+        </style>
+    </head>
+    <body>
+        <table>
+            <tr><td colspan="${4 + dates.length}" class="judul no-border">ABSENSI KEHADIRAN SISWA</td></tr>
+            <tr><td colspan="${4 + dates.length}" class="judul no-border">SMK AD-DA'WAH JAKARTA</td></tr>
+            <tr><td colspan="${4 + dates.length}" class="judul no-border">TAHUN PELAJARAN 2026/2027</td></tr>
+            <tr><td colspan="${4 + dates.length}" class="no-border"></td></tr>
+            <tr>
+                <td colspan="2" class="subjudul no-border">KELAS</td>
+                <td colspan="${2 + dates.length}" class="subjudul no-border">: ${kelasPilih || 'Semua Kelas'}</td>
+            </tr>
+            <tr>
+                <td colspan="2" class="subjudul no-border">PERIODE</td>
+                <td colspan="${2 + dates.length}" class="subjudul no-border">: ${startDate} s/d ${endDate}</td>
+            </tr>
+            <tr><td colspan="${4 + dates.length}" class="no-border"></td></tr>
+            
+            <tr>
+                <th rowspan="2">No</th><th rowspan="2">NISN</th><th rowspan="2" style="width: 250px;">Nama Siswa</th><th rowspan="2">L/P</th>
+                <th colspan="${dates.length}">Tanggal</th>
+            </tr>
+            <tr>${thTanggal}</tr>
+            ${rowsHTML}
+        </table>
+    </body></html>`;
+
+    // 6. Cetak ke Excel
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `Absensi_Matriks_${kelasPilih || 'Semua'}.xls`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }

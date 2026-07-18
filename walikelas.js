@@ -3,37 +3,42 @@ let globalKelasWali = "";
 
 function switchWaliTab(tab) {
     document.querySelectorAll("#walikelasTabs .nav-link").forEach(el => el.classList.remove("active"));
-    document.getElementById("waliTabSiswa").style.display = tab === 'siswa' ? 'block' : 'none';
-    document.getElementById("waliTabAbsensi").style.display = tab === 'absensi' ? 'block' : 'none';
-    event.currentTarget.classList.add("active");
+    
+    if(document.getElementById("waliTabSiswa")) document.getElementById("waliTabSiswa").style.display = tab === 'siswa' ? 'block' : 'none';
+    if(document.getElementById("waliTabAbsensi")) document.getElementById("waliTabAbsensi").style.display = tab === 'absensi' ? 'block' : 'none';
+    if(document.getElementById("waliTabIzin")) document.getElementById("waliTabIzin").style.display = tab === 'izin' ? 'block' : 'none';
+    
+    const targetEl = document.querySelector(`#walikelasTabs a[onclick*="${tab}"]`);
+    if (targetEl) targetEl.classList.add("active");
 }
 
 async function initWaliKelas(namaKelas) {
     globalKelasWali = namaKelas;
-    document.getElementById("namaKelasWaliBadge").innerText = "Kelas: " + namaKelas;
-    document.getElementById("lblKelasAbsenWali").innerText = namaKelas;
+    if(document.getElementById("namaKelasWaliBadge")) document.getElementById("namaKelasWaliBadge").innerText = "Kelas: " + namaKelas;
+    if(document.getElementById("lblKelasAbsenWali")) document.getElementById("lblKelasAbsenWali").innerText = namaKelas;
     
-    // Tombol export poin
-   const wadah = document.getElementById("wadahDataWali");
-    wadah.innerHTML = `
-        <div class="mb-3 d-flex flex-wrap gap-2">
-            <button class="btn btn-danger btn-sm fw-bold" onclick="exportPdfWaliKelas('${namaKelas}')">
-                <i class="fa-solid fa-file-pdf me-1"></i> PDF Poin
-            </button>
-            <button class="btn btn-success btn-sm fw-bold" onclick="exportExcelWaliKelas('${namaKelas}')">
-                <i class="fa-solid fa-file-excel me-1"></i> Excel Poin
-            </button>
-        </div>
-        <div id="tabelSiswaWali"></div>
-    `;
+    const wadah = document.getElementById("wadahDataWali");
+    if(wadah) {
+        wadah.innerHTML = `
+            <div class="mb-3 d-flex flex-wrap gap-2">
+                <button class="btn btn-danger btn-sm fw-bold" onclick="exportPdfWaliKelas('${namaKelas}')">
+                    <i class="fa-solid fa-file-pdf me-1"></i> PDF Poin
+                </button>
+                <button class="btn btn-success btn-sm fw-bold" onclick="exportExcelWaliKelas('${namaKelas}')">
+                    <i class="fa-solid fa-file-excel me-1"></i> Excel Poin
+                </button>
+            </div>
+            <div id="tabelSiswaWali"></div>
+        `;
+    }
     
-    // Set default tanggal hari ini di tab absensi
     const hariIni = new Date().toISOString().split('T')[0];
-    document.getElementById("waliAbsenStart").value = hariIni;
-    document.getElementById("waliAbsenEnd").value = hariIni;
+    if(document.getElementById("waliAbsenStart")) document.getElementById("waliAbsenStart").value = hariIni;
+    if(document.getElementById("waliAbsenEnd")) document.getElementById("waliAbsenEnd").value = hariIni;
 
     loadSiswaWali(namaKelas);
-    switchWaliTab('siswa'); // Set default tab
+    if(typeof loadAntreanIzinWali === 'function') loadAntreanIzinWali();
+    switchWaliTab('siswa');
 }
 
 async function loadSiswaWali(namaKelas) {
@@ -66,12 +71,11 @@ async function exportPdfWaliKelas(namaKelas) {
     document.body.classList.remove('modal-open');
     showAlertBS("Mengunduh...", "Sedang menyiapkan PDF Poin untuk kelas " + namaKelas + "...", "info");
     
-    // Memanggil fungsi dari script.js
     if (typeof tampilkanPreviewRekap === 'function' && typeof unduhPDFRekap === 'function') {
         await tampilkanPreviewRekap(namaKelas, "Semua Bulan");
         unduhPDFRekap(namaKelas, "Semua Bulan");
     } else {
-        showAlertBS("Error", "Fungsi cetak rekap belum tersedia di script utama.", "error");
+        showAlertBS("Error", "Fungsi cetak rekap belum tersedia.", "error");
     }
 }
 
@@ -83,13 +87,10 @@ function exportExcelWaliKelas(namaKelas) {
     }
 }
 
-// ================= FUNGSI BARU: LIHAT RIWAYAT SISWA UNTUK WALI KELAS =================
 async function tampilkanRiwayat(nisn) {
-    // Hapus modal lama jika ada agar tidak menumpuk
     let oldModal = document.getElementById("modalDynamicRiwayat");
     if(oldModal) oldModal.remove();
 
-    // Buat HTML Modal
     let modalHTML = `
     <div class="modal fade" id="modalDynamicRiwayat" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -112,12 +113,10 @@ async function tampilkanRiwayat(nisn) {
         </div>
     </div>`;
     
-    // Masukkan modal ke dalam body dan tampilkan
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     let modalInstance = new bootstrap.Modal(document.getElementById("modalDynamicRiwayat"));
     modalInstance.show();
 
-    // Ambil data riwayat
     const res = await panggilAPI({ aksi: "get_riwayat", nisn: nisn });
     const tb = document.getElementById("tbDynamicRiwayat");
     
@@ -136,62 +135,43 @@ async function tampilkanRiwayat(nisn) {
     }
 }
 
-// ================= UPDATE TAMPILAN ABSENSI WALI KELAS =================
 async function loadAbsensiWaliKelas() {
     const tglMulai = document.getElementById("waliAbsenStart").value;
     const tglAkhir = document.getElementById("waliAbsenEnd").value;
     const tb = document.getElementById("tbAbsenWali");
 
     if(!tglMulai || !tglAkhir) { showAlertBS("Perhatian", "Pilih rentang tanggal terlebih dahulu!", "warning"); return; }
-    tb.innerHTML = '<tr><td colspan="6"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data absensi...</td></tr>';
+    
+    tb.innerHTML = '<tr><td colspan="6" class="py-4"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data absensi...</td></tr>';
 
-    const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: tglMulai, endDate: tglAkhir, kelas: globalKelasWali, roleTujuan: 'siswa' });
+    const res = await panggilAPI({ 
+        aksi: "get_rekap_absensi", 
+        startDate: tglMulai, 
+        endDate: tglAkhir, 
+        kelas: globalKelasWali, 
+        roleTujuan: 'siswa' 
+    });
 
     if (res.status === "sukses" && res.data.length > 0) {
         tb.innerHTML = res.data.map(d => {
             let statusBadge = '<span class="badge bg-danger">Tidak Hadir / Alpa</span>';
             if (d.waktu_masuk && d.waktu_pulang) statusBadge = '<span class="badge bg-success">Selesai</span>';
             else if (d.waktu_masuk) statusBadge = '<span class="badge bg-primary">Masuk</span>';
-
             return `
             <tr>
                 <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
                 <td>${d.username}</td>
                 <td class="text-start fw-bold">${d.nama}</td>
-                <td class="text-success">${d.waktu_masuk || '-'}</td>
-                <td class="text-danger">${d.waktu_pulang || '-'}</td>
+                <td class="text-success fw-bold">${d.waktu_masuk || '-'}</td>
+                <td class="text-danger fw-bold">${d.waktu_pulang || '-'}</td>
                 <td>${statusBadge}</td>
             </tr>
         `}).join("");
     } else {
-        tb.innerHTML = '<tr><td colspan="6" class="text-muted">Tidak ada data siswa.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="6" class="text-muted py-4">Tidak ada data absensi di tanggal tersebut.</td></tr>';
     }
 }
 
-// ================= TAMBAHAN FITUR EXCEL =================
-async function cetakExcelAbsensiWali() {
-    const tglMulai = document.getElementById("waliAbsenStart").value;
-    const tglAkhir = document.getElementById("waliAbsenEnd").value;
-    if(!tglMulai || !tglAkhir) return showAlertBS("Perhatian", "Pilih tanggal dahulu!", "warning");
-
-    showAlertBS("Memproses Excel...", "Menyiapkan data absensi kelas...", "info");
-    const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: tglMulai, endDate: tglAkhir, kelas: globalKelasWali, roleTujuan: 'siswa' });
-
-    if (res.status === "sukses" && res.data.length > 0) {
-        let headers = ["No", "Tanggal", "NISN", "Nama Siswa", "Masuk", "Pulang", "Status"];
-        let dataArr = res.data.map((d, i) => [
-            i + 1, new Date(d.tanggal).toLocaleDateString('id-ID'), d.username, d.nama, 
-            d.waktu_masuk || "Belum Absen", d.waktu_pulang || "Belum Absen",
-            (d.waktu_masuk && d.waktu_pulang) ? "Selesai" : (d.waktu_masuk ? "Hanya Masuk" : "Tidak Hadir / Alpa")
-        ]);
-        
-        let judul = `REKAPITULASI ABSENSI KELAS ${globalKelasWali} (${tglMulai} s/d ${tglAkhir})`;
-        // Kolom [2] (NISN) diformat sebagai Teks
-        unduhExcelLengkap(dataArr, headers, `Absensi_Kelas_${globalKelasWali}`, judul, [2]); 
-    }
-}
-
-// ================= REVISI: CETAK PDF TEKS ASLI + KOP SURAT =================
 function cetakPDFAbsensiWali() {
     const area = document.getElementById("areaCetakAbsenWali");
     if(area.innerHTML.includes("Tidak ada data") || area.innerHTML.includes("Pilih tanggal")) {
@@ -215,11 +195,9 @@ function cetakPDFAbsensiWali() {
         let tglMulai = document.getElementById("waliAbsenStart").value;
         let tglAkhir = document.getElementById("waliAbsenEnd").value;
         
-        // Memuat Kop Surat
         let imgKop = new Image(); imgKop.crossOrigin = "Anonymous"; imgKop.src = "https://i.ibb.co.com/LXG3HPx2/kop.png";
         
         let prosesPDF = function() {
-            // Tulis Kop Surat di Halaman 1 Saja
             try { doc.addImage(imgKop, 'PNG', 15, 10, 180, 25); doc.setLineWidth(0.6); doc.line(15, 37, 195, 37); } catch(e) {}
             
             doc.setFont("times", "bold"); doc.setFontSize(13);
@@ -227,18 +205,93 @@ function cetakPDFAbsensiWali() {
             doc.setFontSize(10); doc.setFont("times", "normal");
             doc.text(`Periode: ${tglMulai} s/d ${tglAkhir}`, 105, 52, { align: "center" });
 
-            // Generate Tabel Teks Asli (Bisa diblok & di-copy)
             doc.autoTable({
                 html: '#areaCetakAbsenWali table',
                 startY: 58, theme: 'grid',
                 styles: { font: 'times', fontSize: 10, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.2, halign: 'center', valign: 'middle' },
                 headStyles: { fillColor: [240, 240, 240], fontStyle: 'bold' },
-                columnStyles: { 2: { halign: 'left' } } // Kolom Nama Siswa rata kiri
+                columnStyles: { 2: { halign: 'left' } } 
             });
             
             doc.save(`Absensi_Kelas_${globalKelasWali}.pdf`);
         };
-        
         if (imgKop.complete) prosesPDF(); else { imgKop.onload = prosesPDF; imgKop.onerror = prosesPDF; }
     }
+}
+
+async function cetakExcelAbsensiWali() {
+    const tglMulai = document.getElementById("waliAbsenStart").value;
+    const tglAkhir = document.getElementById("waliAbsenEnd").value;
+    if(!tglMulai || !tglAkhir) return showAlertBS("Perhatian", "Pilih tanggal dahulu!", "warning");
+
+    showAlertBS("Memproses Excel...", "Menyiapkan matriks absensi kelas...", "info");
+    const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: tglMulai, endDate: tglAkhir, kelas: globalKelasWali, roleTujuan: 'siswa' });
+
+    if (res.status === "sukses" && res.data.length > 0) {
+        exportExcelMatriksAbsensi(res.data, tglMulai, tglAkhir, globalKelasWali);
+    } else {
+        showAlertBS("Kosong", "Tidak ada data absen di periode ini", "warning");
+    }
+}
+
+// ================= FITUR PERSETUJUAN IZIN/SAKIT =================
+async function loadAntreanIzinWali() {
+    const tb = document.getElementById("tbAntreanIzinWali");
+    tb.innerHTML = '<tr><td colspan="6"><i class="fa-solid fa-spinner fa-spin"></i> Memuat antrean...</td></tr>';
+    
+    const res = await panggilAPI({ aksi: "get_antrean_izin_wali", kelas: globalKelasWali });
+    if (res.status === "sukses" && res.data.length > 0) {
+        tb.innerHTML = res.data.map(d => `
+            <tr>
+                <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
+                <td class="text-start"><b>${d.nama}</b><br><small>${d.nisn}</small></td>
+                <td><span class="badge bg-secondary">${d.tipe}</span></td>
+                <td class="text-start">${d.alasan}</td>
+                <td><a href="${d.bukti}" target="_blank" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-image"></i> Foto</a></td>
+                <td>
+                    <button class="btn btn-sm btn-success fw-bold me-1" onclick="prosesIzinWali('${d.id}', 'Disetujui', null)"><i class="fa-solid fa-check"></i></button>
+                    <button class="btn btn-sm btn-danger fw-bold" onclick="bukaModalTolakIzin('${d.id}')"><i class="fa-solid fa-xmark"></i></button>
+                </td>
+            </tr>
+        `).join("");
+    } else { tb.innerHTML = `<tr><td colspan="6" class="text-muted">Tidak ada antrean pengajuan.</td></tr>`; }
+}
+
+async function prosesIzinWali(idLog, status, pesanTolak) {
+    const res = await panggilAPI({ aksi: "update_status_izin", idLog: idLog, status: status, pesan: pesanTolak });
+    if (res.status === "sukses") {
+        showAlertBS("Berhasil", `Pengajuan berhasil ${status.toLowerCase()}!`, "success");
+        loadAntreanIzinWali();
+    } else showAlertBS("Gagal", res.pesan, "error");
+}
+
+function bukaModalTolakIzin(idLog) {
+    let oldModal = document.getElementById("modalTolakIzinDynamic");
+    if(oldModal) oldModal.remove();
+
+    let modalHTML = `
+    <div class="modal fade" id="modalTolakIzinDynamic" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">Tolak Pengajuan Izin/Sakit</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <label class="form-label fw-bold small">Alasan Penolakan</label>
+                    <textarea class="form-control" id="txtAlasanTolakIzin" rows="3" placeholder="Contoh: Surat dokter tidak jelas / Bukti tidak valid..."></textarea>
+                    <button class="btn btn-danger w-100 fw-bold mt-3" onclick="eksekusiTolakIzin('${idLog}')">Konfirmasi Tolak</button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    new bootstrap.Modal(document.getElementById("modalTolakIzinDynamic")).show();
+}
+
+function eksekusiTolakIzin(idLog) {
+    const pesan = document.getElementById("txtAlasanTolakIzin").value;
+    if(!pesan) return showAlertBS("Perhatian", "Alasan penolakan wajib diisi!", "warning");
+    bootstrap.Modal.getInstance(document.getElementById("modalTolakIzinDynamic")).hide();
+    prosesIzinWali(idLog, 'Ditolak', pesan);
 }

@@ -138,34 +138,26 @@ async function downloadExcelAbsensiAdmin() {
     const kat = document.getElementById("filterAbsenKategori").value;
     const kls = document.getElementById("filterAbsenKelas").value;
     
-    let start = "", end = "", teksJudul = "";
+    let start = "", end = "";
     if (tipe === "harian") {
         start = document.getElementById("inputAbsenHarian").value; end = start;
-        teksJudul = `Tanggal: ${new Date(start).toLocaleDateString('id-ID')}`;
     } else if (tipe === "mingguan") {
         start = document.getElementById("inputAbsenStart").value; end = document.getElementById("inputAbsenEnd").value;
-        teksJudul = `Periode: ${start} s/d ${end}`;
     } else if (tipe === "bulanan") {
         let bln = document.getElementById("inputAbsenBulan").value; 
         let thn = bln.split("-")[0]; let bl = bln.split("-")[1];
         start = `${thn}-${bl}-01`; let lastDay = new Date(thn, bl, 0).getDate(); end = `${thn}-${bl}-${lastDay}`;
-        teksJudul = `Bulan: ${bl} Tahun ${thn}`;
     }
 
     if(!start) return showAlertBS("Perhatian", "Atur filter tanggal terlebih dahulu!", "warning");
-    showAlertBS("Memproses Excel...", "Menyiapkan data absensi...", "info");
+    showAlertBS("Memproses Excel...", "Menyiapkan matriks absensi...", "info");
 
     const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: start, endDate: end, kelas: kls, roleTujuan: kat });
     
     if (res.status === "sukses" && res.data.length > 0) {
-        let headers = ["No", "Tanggal", "ID/NISN", "Nama Lengkap", "Kelas", "Masuk", "Pulang", "Status"];
-        let dataArr = res.data.map((d, i) => [
-            i + 1, new Date(d.tanggal).toLocaleDateString('id-ID'), d.username, d.nama, d.kelas || "-", 
-            d.waktu_masuk || "Belum Absen", d.waktu_pulang || "Belum Absen",
-            (d.waktu_masuk && d.waktu_pulang) ? "Selesai" : (d.waktu_masuk ? "Hanya Masuk" : "Tidak Hadir / Alpa")
-        ]);
-        
-        let judulAsli = `LAPORAN ABSENSI - ${teksJudul.toUpperCase()} - ${kat.toUpperCase()} ${kls ? 'KELAS ' + kls : ''}`;
-        unduhExcelLengkap(dataArr, headers, "Rekap_Absensi_Admin", judulAsli, [2]);
+        // Panggil fungsi mesin pembuat Matriks
+        exportExcelMatriksAbsensi(res.data, start, end, kls || "Seluruh Kelas");
+    } else {
+        showAlertBS("Kosong", "Tidak ada data untuk difilter", "warning");
     }
 }
