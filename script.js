@@ -275,34 +275,52 @@ async function handleLogin(e) {
 
 function aktifkanTampilanUser(res) {
   currentUser = res;
-  document.getElementById("loginSection").style.display = "none";
-  document.getElementById("userBadge").style.setProperty("display", "flex", "important");
-  document.getElementById("txtNamaUser").innerText = `${res.nama} (${res.role.toUpperCase()})`;
+  
+  if(document.getElementById("loginSection")) document.getElementById("loginSection").style.display = "none";
+  if(document.getElementById("userBadge")) document.getElementById("userBadge").style.setProperty("display", "flex", "important");
+  if(document.getElementById("txtNamaUser")) document.getElementById("txtNamaUser").innerText = `${res.nama} (${res.role.toUpperCase()})`;
   
   if (res.role === "siswa") {
-    document.getElementById("siswaSection").style.display = "block";
-    document.getElementById("siswaPoin").innerText = res.poin;
+    if(document.getElementById("siswaSection")) document.getElementById("siswaSection").style.display = "block";
+    if(document.getElementById("siswaPoin")) document.getElementById("siswaPoin").innerText = res.poin;
+    
     const bdg = document.getElementById("siswaStatus");
-    if (res.poin >= 100) { bdg.className = "badge bg-danger fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "SP 3 / DIKEMBALIKAN"; }
-    else if (res.poin >= 75) { bdg.className = "badge bg-warning text-dark fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "SP 2 (Peringatan Keras)"; }
-    else if (res.poin >= 50) { bdg.className = "badge bg-warning text-dark fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "SP 1 (Peringatan)"; }
-    else { bdg.className = "badge bg-success fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "Aman (Berkelakuan Baik)"; }
-    loadRiwayatSiswa(res.identitas);
-    initDashboardAbsensi(res);
-    switchSiswaTab('profil');
+    if (bdg) {
+        if (res.poin >= 100) { bdg.className = "badge bg-danger fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "SP 3 / DIKEMBALIKAN"; }
+        else if (res.poin >= 75) { bdg.className = "badge bg-warning text-dark fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "SP 2 (Peringatan Keras)"; }
+        else if (res.poin >= 50) { bdg.className = "badge bg-warning text-dark fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "SP 1 (Peringatan)"; }
+        else { bdg.className = "badge bg-success fs-6 px-3 py-2 rounded-pill"; bdg.innerText = "Aman (Berkelakuan Baik)"; }
+    }
+
+    // Tampilkan detail nama, nisn, kelas di tab Profil
+    if(document.getElementById("txtNamaProfilSiswa")) document.getElementById("txtNamaProfilSiswa").innerText = res.nama;
+    if(document.getElementById("txtNisnProfilSiswa")) document.getElementById("txtNisnProfilSiswa").innerText = res.identitas;
+    if(document.getElementById("txtKelasProfilSiswa")) document.getElementById("txtKelasProfilSiswa").innerText = res.kelas || "-";
+    
+    // Tampilkan Foto Profil (Jika kosong, pakai avatar inisial nama)
+    const imgEl = document.getElementById("imgProfilSiswa");
+    if (imgEl) {
+        imgEl.src = res.foto_profil ? res.foto_profil : `https://ui-avatars.com/api/?name=${res.nama.replace(/\s/g, '+')}&background=198754&color=fff&size=200`;
+    }
+
+    if(typeof loadRiwayatSiswa === 'function') loadRiwayatSiswa(res.identitas);
+    if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
+    if(typeof switchSiswaTab === 'function') switchSiswaTab('profil');
+    
   } else if (res.role === "guru") {
-    document.getElementById("guruSection").style.display = "block";
-    loadFormDataMaster();
-    initDashboardAbsensi(res);
-    switchGuruTab('profil');
+    if(document.getElementById("guruSection")) document.getElementById("guruSection").style.display = "block";
+    if(typeof loadFormDataMaster === 'function') loadFormDataMaster();
+    if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
+    if(typeof switchGuruTab === 'function') switchGuruTab('profil');
+    
   } else if (res.role === "admin") {
-    document.getElementById("adminSection").style.display = "block";
-    loadFormDataMaster();
-    loadStats();
+    if(document.getElementById("adminSection")) document.getElementById("adminSection").style.display = "block";
+    if(typeof loadFormDataMaster === 'function') loadFormDataMaster();
+    if(typeof loadStats === 'function') loadStats();
+    
   } else if (res.role === "walikelas") {
-    document.getElementById("walikelasSection").style.display = "block";
-    // Fungsi ini akan kita buat di walikelas.js
-    initWaliKelas(res.kelas); 
+    if(document.getElementById("walikelasSection")) document.getElementById("walikelasSection").style.display = "block";
+    if(typeof initWaliKelas === 'function') initWaliKelas(res.kelas); 
   }
 }
 
@@ -359,6 +377,46 @@ function switchSiswaTab(tab) {
     // 3. Pasang class active berdasarkan nama tab (bukan dari event klik)
     const targetEl = document.querySelector(`#siswaTabs a[onclick*="${tab}"]`);
     if (targetEl) targetEl.classList.add("active");
+}
+
+// ================= FITUR UPLOAD FOTO PROFIL SISWA =================
+async function previewDanUploadFotoSiswa(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    // Validasi ukuran foto (Maksimal 2 MB)
+    if (file.size > 2 * 1024 * 1024) {
+        return showAlertBS("Perhatian", "Ukuran foto terlalu besar! Maksimal 2 MB.", "warning");
+    }
+
+    const labelStatus = document.getElementById("statusUploadFotoSiswa");
+    labelStatus.innerHTML = '<span class="text-primary"><i class="fa-solid fa-spinner fa-spin me-1"></i> Sedang mengunggah foto...</span>';
+    
+    const reader = new FileReader();
+    reader.onloadend = async function() {
+        // 1. Tampilkan preview langsung di layar siswa agar terasa cepat
+        document.getElementById("imgProfilSiswa").src = reader.result;
+        
+        // 2. Panggil API untuk menyimpan ke Supabase
+        const res = await panggilAPI({ 
+            aksi: "upload_foto_profil", 
+            username: currentUser.identitas, 
+            fotoBase64: reader.result 
+        });
+        
+        if (res.status === "sukses") {
+            labelStatus.innerHTML = '<span class="text-success"><i class="fa-solid fa-check me-1"></i> Foto berhasil diperbarui!</span>';
+            // Update memori sesi di HP/Laptop siswa
+            currentUser.foto_profil = res.url;
+            localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+            
+            setTimeout(() => { labelStatus.innerHTML = ''; }, 3000);
+        } else {
+            labelStatus.innerHTML = '<span class="text-danger"><i class="fa-solid fa-xmark me-1"></i> Gagal mengunggah.</span>';
+            showAlertBS("Error Upload", res.pesan, "error");
+        }
+    };
+    reader.readAsDataURL(file);
 }
 
 function switchGuruTab(tab) {
@@ -1150,7 +1208,13 @@ async function panggilAPI(payload) {
          const { data: logs } = await supabaseClient.from('log_pelanggaran').select('poin').eq('nisn', payload.username).eq('status', 'Disetujui');
          poin = logs ? logs.reduce((sum, l) => sum + (l.poin || 0), 0) : 0;
       }
-      return { status: "sukses", role: payload.role, identitas: data.username, nama: data.nama_lengkap, kelas: data.kelas, poin: poin };
+      return { status: "sukses", 
+          role: payload.role, 
+          identitas: data.username, 
+          nama: data.nama_lengkap, 
+          kelas: data.kelas, 
+          poin: poin,
+          foto_profil: data.foto_profil };
     }
 
     if (aksi === "get_form_data") {
@@ -1207,6 +1271,50 @@ async function panggilAPI(payload) {
       }]);
       
       if (error) return { status: "gagal", pesan: error.message }; return { status: "sukses" };
+    }
+
+    if (aksi === "upload_foto_profil") {
+        try {
+            if (!payload.fotoBase64 || !payload.fotoBase64.startsWith('data:image')) {
+                return { status: "gagal", pesan: "Format file tidak valid." };
+            }
+            
+            // PENGGANTI FETCH: Konversi manual Base64 ke Blob (Tahan Banting & Anti "Failed to fetch")
+            const arr = payload.fotoBase64.split(',');
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            const blob = new Blob([u8arr], { type: mime });
+            
+            // Buat nama file (contoh: profil_12345678_16790.jpg)
+            const namaFile = `profil_${payload.username}_${new Date().getTime()}.jpg`;
+            
+            // Upload ke Storage Supabase
+            const { error: uploadError } = await supabaseClient.storage
+                .from('tempat-naro-foto')
+                .upload(namaFile, blob, { contentType: mime, upsert: true });
+                
+            if (uploadError) return { status: "gagal", pesan: uploadError.message };
+            
+            // Dapatkan URL Publik
+            const { data: urlData } = supabaseClient.storage.from('tempat-naro-foto').getPublicUrl(namaFile);
+            const urlFoto = urlData.publicUrl;
+            
+            // Ambil username dan paksa hapus spasi tersembunyi
+            const targetUsername = String(payload.username).trim();
+            
+            // Simpan URL tersebut ke tabel users
+            const { error: updateErr } = await supabaseClient.from('users').update({ foto_profil: urlFoto }).eq('username', targetUsername);
+            if (updateErr) return { status: "gagal", pesan: updateErr.message };
+            
+            return { status: "sukses", url: urlFoto };
+        } catch (err) {
+            return { status: "gagal", pesan: "Sistem error saat upload: " + err.message };
+        }
     }
 
     if (aksi === "get_pending") {
@@ -1373,33 +1481,32 @@ async function panggilAPI(payload) {
     }
 
     if (aksi === "catat_absen") {
-            let waktuSekarang = new Date().toLocaleTimeString('it-IT'); // Format HH:MM:SS
-            let tglHariIni = new Date().toISOString().split('T')[0];
+        let waktuSekarang = new Date().toLocaleTimeString('it-IT');
+        let tglHariIni = new Date().toISOString().split('T')[0];
+        
+        const { data: userData } = await supabaseClient.from('users').select('*').eq('username', payload.username).maybeSingle();
+        if (!userData) return { status: "gagal", pesan: "QR tidak dikenali (Bukan Siswa/Guru sekolah ini)." };
 
-            // REVISI: Gunakan maybeSingle() untuk mencari user
-            const { data: userData } = await supabaseClient.from('users').select('*').eq('username', payload.username).maybeSingle();
-            if (!userData) return { status: "gagal", pesan: "QR tidak dikenali (Bukan Siswa/Guru sekolah ini)." };
+        // FITUR BARU: Bawa data foto_profil
+        const infoUser = { 
+            nama: userData.nama_lengkap, 
+            username: userData.username, 
+            kelas: userData.kelas, 
+            foto: userData.foto_profil 
+        };
 
-            // REVISI: Gunakan maybeSingle() untuk mengecek absen hari ini
-            const { data: logHariIni } = await supabaseClient.from('log_absensi')
-                .select('*').eq('username', payload.username).eq('tanggal', tglHariIni).maybeSingle();
+        const { data: logHariIni } = await supabaseClient.from('log_absensi').select('*').eq('username', payload.username).eq('tanggal', tglHariIni).maybeSingle();
 
-            if (!logHariIni) {
-                // Belum absen masuk -> Buat Record Masuk
-                await supabaseClient.from('log_absensi').insert([{
-                    tanggal: tglHariIni, waktu_masuk: waktuSekarang, username: payload.username, role: userData.role
-                }]);
-                return { status: "sukses", kondisi: "masuk", waktu: waktuSekarang, user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
-            } else if (logHariIni && !logHariIni.waktu_pulang) {
-                // Sudah masuk, belum pulang -> Update Record Pulang
-                await supabaseClient.from('log_absensi').update({ waktu_pulang: waktuSekarang })
-                    .eq('id', logHariIni.id);
-                return { status: "sukses", kondisi: "pulang", waktu: waktuSekarang, user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
-            } else {
-                // Sudah masuk dan pulang
-                return { status: "sukses", kondisi: "sudah_absen", user: { nama: userData.nama_lengkap, username: userData.username, kelas: userData.kelas } };
-            }
+        if (!logHariIni) {
+            await supabaseClient.from('log_absensi').insert([{ tanggal: tglHariIni, waktu_masuk: waktuSekarang, username: payload.username, role: userData.role }]);
+            return { status: "sukses", kondisi: "masuk", waktu: waktuSekarang, user: infoUser };
+        } else if (logHariIni && !logHariIni.waktu_pulang) {
+            await supabaseClient.from('log_absensi').update({ waktu_pulang: waktuSekarang }).eq('id', logHariIni.id);
+            return { status: "sukses", kondisi: "pulang", waktu: waktuSekarang, user: infoUser };
+        } else {
+            return { status: "sukses", kondisi: "sudah_absen", user: infoUser };
         }
+    }
 
     if (aksi === "get_all_guru") {
             const { data } = await supabaseClient.from('users').select('*').in('role', ['guru', 'walikelas']).order('nama_lengkap', { ascending: true });

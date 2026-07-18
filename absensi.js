@@ -2,37 +2,23 @@
 let html5QrcodeScanner = null;
 
 // Dipanggil saat Siswa/Guru berhasil login
-async function initDashboardAbsensi(user) {
-    let wadahQR = user.role === 'siswa' ? "qrCodeSiswa" : "qrCodeGuru";
-    let lblNama = user.role === 'siswa' ? "lblNamaSiswaQR" : "lblNamaGuruQR";
-    let lblId = user.role === 'siswa' ? "lblNisnSiswaQR" : "lblIdGuruQR";
-    
-    document.getElementById(lblNama).innerText = user.nama;
-    document.getElementById(lblId).innerText = user.identitas;
-    if(user.role === 'siswa') document.getElementById("lblKelasSiswaQR").innerText = user.kelas;
-
-    // Bersihkan QR lama (jika ada) lalu buat baru
-    document.getElementById(wadahQR).innerHTML = "";
-    new QRCode(document.getElementById(wadahQR), {
-        text: user.identitas, // QR berisi NISN / ID Guru
-        width: 150, height: 150
-    });
-
-    // Cek status hari ini
-    const res = await panggilAPI({ aksi: "get_absen_hari_ini", username: user.identitas });
-    let statusBox = document.getElementById(user.role === 'siswa' ? "statusAbsenSiswa" : "statusAbsenGuru");
-    
-    if (res.data) {
-        if (res.data.waktu_pulang) {
-            statusBox.className = "alert alert-success py-2 mb-0 fw-bold";
-            statusBox.innerHTML = `Selesai Absen Masuk & Pulang <br><small>(${res.data.waktu_masuk} - ${res.data.waktu_pulang})</small>`;
-        } else {
-            statusBox.className = "alert alert-primary py-2 mb-0 fw-bold";
-            statusBox.innerHTML = `Absen Masuk Berhasil <br><small>(${res.data.waktu_masuk}) - Jangan lupa untuk absen pulang!</small>`;
+function initDashboardAbsensi(res) {
+    // Gunakan try-catch agar kebal error (Anti-Crash)
+    try {
+        const textNama = document.getElementById("txtQrNama");
+        if(textNama) textNama.innerText = res.nama;
+        
+        const textRole = document.getElementById("txtQrRole");
+        if(textRole) textRole.innerText = res.identitas;
+        
+        const wadah = document.getElementById("qrcode");
+        if(wadah && typeof QRCode !== 'undefined') {
+            wadah.innerHTML = "";
+            new QRCode(wadah, { text: res.identitas, width: 200, height: 200 });
         }
+    } catch (e) {
+        console.log("Info: Area QR Code tidak ditampilkan untuk role ini.");
     }
-
-    loadRiwayatAbsenPersonal(user.identitas, user.role);
 }
 
 async function loadRiwayatAbsenPersonal(username, role) {
@@ -107,25 +93,42 @@ async function prosesScanQR(usernameScanned) {
 
     const res = await panggilAPI({ aksi: "catat_absen", username: usernameScanned });
     
+    // HANYA MENGAMBIL GAMBAR DARI HTML (TIDAK BOLEH ADA document.createElement LAGI)
+    const imgScan = document.getElementById("fotoScanResult"); 
+
     if(res.status === "sukses") {
+        // Ganti src gambar dengan foto dari database
+        if (imgScan) {
+            imgScan.src = res.user.foto ? res.user.foto : `https://ui-avatars.com/api/?name=${res.user.nama.replace(/\s/g, '+')}&background=198754&color=fff`;
+        }
+
+        // Isi data teks ke HTML
         document.getElementById("scanNamaResult").innerText = res.user.nama;
         document.getElementById("scanIdResult").innerText = res.user.username;
         document.getElementById("scanKelasResult").innerText = res.user.kelas || "Guru";
         
+        // Pesan status absen
         if (res.kondisi === "masuk") {
             boxStatus.className = "alert alert-success py-2 fw-bold mb-0 text-wrap";
             boxStatus.innerHTML = `Masuk Berhasil<br><small>${res.waktu}</small>`;
-            bunyikanBeep(); // <--- BEEP BERBUNYI DI SINI
+            if(typeof bunyikanBeep === 'function') bunyikanBeep();
         } else if (res.kondisi === "pulang") {
             boxStatus.className = "alert alert-primary py-2 fw-bold mb-0 text-wrap";
             boxStatus.innerHTML = `Pulang Berhasil<br><small>${res.waktu}</small>`;
-            bunyikanBeep(); // <--- BEEP BERBUNYI DI SINI
+            if(typeof bunyikanBeep === 'function') bunyikanBeep();
         } else if (res.kondisi === "sudah_absen") {
             boxStatus.className = "alert alert-danger py-2 fw-bold mb-0 text-wrap";
-            boxStatus.innerText = "Siswa/Guru sudah melakukan absensi masuk & pulang hari ini.";
+            boxStatus.innerText = "Siswa/Guru sudah absen masuk & pulang hari ini.";
         }
-        loadLogAbsenAdminHariIni();
+        
+        // Segarkan tabel log absen admin
+        if(typeof loadLogAbsenAdminHariIni === 'function') loadLogAbsenAdminHariIni();
+        
     } else {
+        // Jika QR tidak ditemukan di database
+        if (imgScan) {
+            imgScan.src = "https://ui-avatars.com/api/?name=X&background=dc3545&color=fff";
+        }
         document.getElementById("scanNamaResult").innerText = "TIDAK DITEMUKAN";
         document.getElementById("scanIdResult").innerText = usernameScanned;
         document.getElementById("scanKelasResult").innerText = "-";
