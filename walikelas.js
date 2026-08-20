@@ -153,10 +153,15 @@ async function loadAbsensiWaliKelas() {
     });
 
     if (res.status === "sukses" && res.data.length > 0) {
-        tb.innerHTML = res.data.map(d => {
+       tb.innerHTML = res.data.map(d => {
             let statusBadge = '<span class="badge bg-danger">Tidak Hadir / Alpa</span>';
-            if (d.waktu_masuk && d.waktu_pulang) statusBadge = '<span class="badge bg-success">Selesai</span>';
+            
+            // Logika baru untuk membaca S dan I
+            if (d.status_hadir === 'S') statusBadge = '<span class="badge bg-warning text-dark">Sakit (S)</span>';
+            else if (d.status_hadir === 'I') statusBadge = '<span class="badge bg-info text-dark">Izin (I)</span>';
+            else if (d.waktu_masuk && d.waktu_pulang) statusBadge = '<span class="badge bg-success">Selesai</span>';
             else if (d.waktu_masuk) statusBadge = '<span class="badge bg-primary">Masuk</span>';
+            
             return `
             <tr>
                 <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>

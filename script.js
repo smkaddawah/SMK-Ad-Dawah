@@ -19,31 +19,36 @@ async function loadPending() {
     const res = await panggilAPI({ aksi: "get_pending" });
     if (res.status === "sukses" && res.data && res.data.length > 0) {
       tb.innerHTML = res.data.map(d => {
-        let tombolFoto = `<span class="text-muted small"><i class="fa-solid fa-image-slash me-1"></i>Tidak ada foto</span>`;
-        if (d.bukti && String(d.bukti).startsWith('data:image')) {
-          tombolFoto = `<a href="${d.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image me-1"></i>Lihat Foto</a>`;
-        } else if (d.bukti && String(d.bukti).startsWith('http')) {
-          tombolFoto = `<a href="${d.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image me-1"></i>Lihat Foto</a>`;
-        }
+            let tombolFoto = (d.bukti && (String(d.bukti).startsWith('data:image') || String(d.bukti).startsWith('http'))) ? `<a href="${d.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image"></i> Foto</a>` : 'Tidak ada';
+            
+            // Rahasiakan jika pelapornya siswa
+            let namaPelapor = (d.pelapor && d.pelapor.startsWith("[SISWA]")) ? "<i>Anonim</i>" : d.pelapor;
+            
+            // Tanda jika siswa belum diketahui
+           // Tanda jika siswa atau kode belum diisi oleh Admin (null)
+            let isUnknown = (!d.nisn || !d.kode || d.kode === "TBD");
+            
+            // Supaya tidak error saat menampilkan kode yang null
+            let tampilanKode = d.kode ? `${d.kode} - ${d.namaPelanggaran}` : "Menunggu Validasi Admin";
+            let infoSiswa = isUnknown ? `<span class="text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation"></i> Siswa / Kasus Belum Jelas</span>` : `<b>${d.namaSiswa}</b><br><span class="badge bg-secondary">${d.kelas}</span> (${d.nisn})`;
 
-        return `
-          <tr>
-            <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
-            <td><b>${d.namaSiswa}</b><br><span class="badge bg-secondary">${d.kelas}</span> (${d.nisn})</td>
-            <td><span class="badge bg-danger mb-1">${d.kode} - ${d.namaPelanggaran}</span><br><small class="text-muted">${d.keterangan}</small></td>
-            <td>${d.pelapor}</td>
-            <td>${tombolFoto}</td>
-            <td>
-              <div class="btn-group btn-group-sm">
-                <button class="btn btn-success" onclick="verifikasi('${d.idLog}', 'Disetujui')" title="Setujui"><i class="fa-solid fa-check"></i></button>
-                <button class="btn btn-warning text-dark" onclick="verifikasi('${d.idLog}', 'Ditolak')" title="Tolak"><i class="fa-solid fa-xmark"></i></button>
-                <button class="btn btn-info text-white" onclick="bukaModalEditLapor('${d.idLog}', '${d.kode}', '${d.keterangan}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-danger" onclick="hapusLaporan('${d.idLog}')" title="Hapus"><i class="fa-solid fa-trash"></i></button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join("");
+            return `
+            <tr class="${isUnknown ? 'table-warning' : ''}">
+                <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
+                <td>${infoSiswa}</td>
+                <td><span class="badge bg-danger mb-1">${tampilanKode}</span><br><small class="text-muted">${d.keterangan}</small></td>
+                <td>${namaPelapor}</td>
+                <td>${tombolFoto}</td>
+                <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-success" onclick="verifikasi('${d.idLog}', 'Disetujui', ${isUnknown})" title="Setujui"><i class="fa-solid fa-check"></i></button>
+                    <button class="btn btn-warning text-dark" onclick="verifikasi('${d.idLog}', 'Ditolak', false)" title="Tolak"><i class="fa-solid fa-xmark"></i></button>
+                    <button class="btn btn-info text-white" onclick="bukaModalEditLapor('${d.idLog}', '${d.kode}', '${d.keterangan}', '${d.nisn}', '${d.bukti}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-danger" onclick="hapusLaporan('${d.idLog}')" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                </td>
+            </tr>`;
+        }).join("");
     } else { 
       tb.innerHTML = "<tr><td colspan='6' class='text-center text-muted py-3'>Alhamdulillah, tidak ada laporan pending.</td></tr>"; 
     }
@@ -346,6 +351,17 @@ function aktifkanTampilanUser(res) {
     if(typeof loadRiwayatIzinSiswa === 'function') loadRiwayatIzinSiswa(res.identitas);
     
     if(typeof switchSiswaTab === 'function') switchSiswaTab('profil');
+
+    // ... (kode-kode siswa di atasnya biarkan saja) ...
+    
+    if(typeof loadRiwayatSiswa === 'function') loadRiwayatSiswa(res.identitas);
+    if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
+    if(typeof loadRiwayatIzinSiswa === 'function') loadRiwayatIzinSiswa(res.identitas);
+    
+    // ---> TAMBAHKAN SATU BARIS INI DI SINI <---
+    if(typeof isiDropdownLaporSiswa === 'function') isiDropdownLaporSiswa();
+    
+    if(typeof switchSiswaTab === 'function') switchSiswaTab('profil');
     
   } else if (res.role === "guru") {
     if(document.getElementById("guruSection")) document.getElementById("guruSection").style.display = "block";
@@ -406,20 +422,21 @@ function switchAdminTab(tab, judulMenu) {
 }
 
 function switchSiswaTab(tab) {
-    // 1. Reset semua class active
+    // 1. Matikan semua warna aktif di menu sebelah kiri
     document.querySelectorAll("#siswaTabs .nav-link").forEach(el => el.classList.remove("active"));
     
-    // 2. Tampilkan/Sembunyikan konten
-    document.getElementById("siswaTabProfil").style.display = tab === 'profil' ? 'block' : 'none';
-    document.getElementById("siswaTabLogAbsen").style.display = tab === 'logabsen' ? 'block' : 'none';
-    document.getElementById("siswaTabPelanggaran").style.display = tab === 'pelanggaran' ? 'block' : 'none';
+    // 2. Sembunyikan atau tampilkan halamannya
+    if(document.getElementById("siswaTabProfil")) document.getElementById("siswaTabProfil").style.display = tab === 'profil' ? 'block' : 'none';
+    if(document.getElementById("siswaTabLogAbsen")) document.getElementById("siswaTabLogAbsen").style.display = tab === 'logabsen' ? 'block' : 'none';
+    if(document.getElementById("siswaTabPelanggaran")) document.getElementById("siswaTabPelanggaran").style.display = tab === 'pelanggaran' ? 'block' : 'none';
+    if(document.getElementById("siswaTabIzin")) document.getElementById("siswaTabIzin").style.display = tab === 'izin' ? 'block' : 'none';
     
-    // 3. Pasang class active berdasarkan nama tab (bukan dari event klik)
+    // INI DIA TAMBAHANNYA AGAR TAB LAPOR BISA MUNCUL:
+    if(document.getElementById("siswaTabLapor")) document.getElementById("siswaTabLapor").style.display = tab === 'lapor' ? 'block' : 'none';
+    
+    // 3. Nyalakan warna aktif pada menu yang diklik
     const targetEl = document.querySelector(`#siswaTabs a[onclick*="${tab}"]`);
     if (targetEl) targetEl.classList.add("active");
-
-    const tabSiswaIzin = document.getElementById("siswaTabIzin");
-    if(tabSiswaIzin) tabSiswaIzin.style.display = tab === 'izin' ? 'block' : 'none';
 }
 
 // ================= FUNGSI GANTI MODE SHOW / EDIT PROFIL =================
@@ -646,11 +663,14 @@ async function loadStats() {
   }
 }
 
-async function verifikasi(idLog, keputusan) {
-  showConfirmBS(`Apakah Anda yakin ingin mengubah status laporan ini menjadi "${keputusan}"?`, async () => {
-    const res = await panggilAPI({ aksi: "verifikasi", idLog, keputusan });
-    if (res.status === "sukses") { showAlertBS("Berhasil", `Laporan telah ${keputusan.toLowerCase()}`, "success"); loadPending(); }
-  });
+async function verifikasi(idLog, keputusan, isUnknown = false) {
+    if(keputusan === 'Disetujui' && isUnknown) {
+        return showAlertBS("Stop!", "Anda harus Edit laporan ini dulu untuk menentukan Siapa Siswanya dan Apa Kategori Pelanggarannya!", "warning");
+    }
+    showConfirmBS(`Yakin ingin mengubah status laporan menjadi "${keputusan}"?`, async () => {
+        const res = await panggilAPI({ aksi: "verifikasi", idLog, keputusan });
+        if (res.status === "sukses") { showAlertBS("Berhasil", `Laporan telah ${keputusan.toLowerCase()}`, "success"); loadPending(); }
+    });
 }
 
 async function hapusLaporan(idLog) {
@@ -660,22 +680,235 @@ async function hapusLaporan(idLog) {
   });
 }
 
-function bukaModalEditLapor(idLog, kode, ket) {
-  document.getElementById("editIdLog").value = idLog;
-  document.getElementById("editKodeLapor").value = kode;
-  document.getElementById("editKetLapor").value = ket;
-  new bootstrap.Modal(document.getElementById("modalEditLapor")).show();
+// ================= MODAL EDIT & VALIDASI (KATEGORI SESUAI KODE A, B, C...) =================
+async function bukaModalEditLapor(idLog, kodeLama, keteranganLama, nisnLama, buktiLama) {
+    let oldModal = document.getElementById("modalEditLaporDynamic");
+    if(oldModal) oldModal.remove();
+
+    let listKategori = [];
+    let listSiswa = [];
+
+    try {
+        const resKamus = await supabaseClient.from('kamus_pelanggaran').select('*');
+        if (resKamus.data) listKategori = resKamus.data;
+
+        const resSiswa = await panggilAPI({ aksi: "get_all_siswa" });
+        if (resSiswa.status === "sukses") listSiswa = resSiswa.data;
+    } catch (err) {
+        console.error("Gagal memuat data:", err);
+    }
+
+    window.dataMaster = { siswa: listSiswa, kategori: listKategori };
+
+    // 1. Opsi Kelas
+    let optKelas = '<option value="">-- Pilih Kelas --</option>';
+    if (listSiswa.length > 0) {
+        let klsUnik = [...new Set(listSiswa.map(s => s.kelas))].filter(k => k);
+        optKelas += klsUnik.sort().map(k => `<option value="${k}">${k}</option>`).join('');
+    }
+
+    // 2. Peta Kategori Resmi Berdasarkan Huruf Depan Kode (A, B, C...)
+    const petaKategori = {
+        'A': 'A. Keterlambatan',
+        'B': 'B. Kehadiran',
+        'C': 'C. Kegiatan Belajar',
+        'D': 'D. Seragam',
+        'E': 'E. Kepribadian',
+        'F': 'F. Ketertiban',
+        'G': 'G. Merokok',
+        'H': 'H. Pornografi',
+        'I': 'I. Senjata Tajam',
+        'J': 'J. Narkoba dan Minuman Keras',
+        'K': 'K. Perkelahian atau Tawuran',
+        'L': 'L. Prakerin',
+        'M': 'M. Intimidasi Atau Ancaman Kekerasan'
+    };
+
+    let kategoriMap = {};
+    listKategori.forEach(k => {
+        let hurufDepan = (k.kode || '').charAt(0).toUpperCase();
+        let katNama = petaKategori[hurufDepan] || 'Z. Lainnya';
+        
+        if (!kategoriMap[katNama]) kategoriMap[katNama] = [];
+        kategoriMap[katNama].push(k);
+    });
+    window._kategoriMap = kategoriMap;
+
+    let optKategoriHTML = '<option value="">-- Pilih Kategori Pelanggaran --</option>';
+    Object.keys(kategoriMap).sort().forEach(kat => {
+        optKategoriHTML += `<option value="${kat}">${kat}</option>`;
+    });
+
+    let ketBersih = (keteranganLama !== 'undefined' && keteranganLama !== 'null') ? keteranganLama : '';
+    let fotoHTML = (buktiLama && buktiLama !== 'undefined' && buktiLama !== 'null' && buktiLama !== 'Tidak ada')
+        ? `<div class="mt-2 text-center"><img src="${buktiLama}" class="img-fluid rounded border shadow-sm" style="max-height: 200px;"></div>`
+        : `<div class="alert alert-secondary text-center small mt-2">Tidak ada bukti foto.</div>`;
+
+    let modalHTML = `
+    <div class="modal fade" id="modalEditLaporDynamic" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-clipboard-check me-2"></i>Validasi Laporan</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label fw-bold small text-muted">1. Pilih Kelas</label>
+                            <select class="form-select border-info" id="editLaporKelas" onchange="filterSiswaEditLapor()">${optKelas}</select>
+                        </div>
+                        <div class="col-md-6"><label class="form-label fw-bold small text-muted">2. Nama Siswa</label>
+                            <select class="form-select border-info" id="editLaporNisn"><option value="">-- Pilih Kelas Dahulu --</option></select>
+                        </div>
+                        
+                        <!-- 3. KATEGORI -->
+                        <div class="col-md-6"><label class="form-label fw-bold small text-muted">3. Kategori Pelanggaran</label>
+                            <select class="form-select border-danger fw-bold" id="editLaporKategori" onchange="filterJenisEditLapor()">${optKategoriHTML}</select>
+                        </div>
+                        
+                        <!-- 4. JENIS -->
+                        <div class="col-md-6"><label class="form-label fw-bold small text-muted">4. Jenis Pelanggaran</label>
+                            <select class="form-select border-danger fw-bold" id="editLaporKode" onchange="updatePoinSanksiEditLapor()" disabled>
+                                <option value="">-- Pilih Kategori Dahulu --</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-3"><label class="form-label fw-bold small text-muted">5a. Poin</label>
+                            <input type="text" class="form-control text-danger fw-bold text-center" id="editLaporPoin" readonly style="background-color: #ffe6e6;">
+                        </div>
+                        <div class="col-md-9"><label class="form-label fw-bold small text-muted">5b. Sanksi Otomatis</label>
+                            <input type="text" class="form-control text-danger fw-bold" id="editLaporSanksi" readonly style="background-color: #ffe6e6;">
+                        </div>
+                        <div class="col-12"><label class="form-label fw-bold small text-muted">6. Keterangan / Kronologi dari Siswa</label>
+                            <textarea class="form-control" id="editLaporKeterangan" rows="3">${ketBersih}</textarea>
+                        </div>
+                        <div class="col-12"><label class="form-label fw-bold small text-muted mb-0">7. Bukti Foto</label>${fotoHTML}</div>
+                    </div>
+                    <button class="btn btn-info text-white w-100 fw-bold mt-4 py-3 shadow-sm" onclick="simpanLengkapLaporan('${idLog}')">
+                        <i class="fa-solid fa-save me-2"></i>Simpan Validasi Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Auto-Select Kelas & Siswa
+    if (nisnLama && nisnLama !== "UNKNOWN" && nisnLama !== "null") {
+        let sData = listSiswa.find(s => s.nisn === nisnLama || s.username === nisnLama);
+        if(sData) { 
+            document.getElementById("editLaporKelas").value = sData.kelas; 
+            filterSiswaEditLapor(); 
+            document.getElementById("editLaporNisn").value = sData.nisn || sData.username; 
+        }
+    }
+    
+    // Auto-Select Kategori & Jenis Pelanggaran
+    if (kodeLama && kodeLama !== "TBD" && kodeLama !== "null") {
+        let pData = listKategori.find(k => k.kode === kodeLama);
+        if(pData) {
+            let hurufDepan = (pData.kode || '').charAt(0).toUpperCase();
+            let kat = petaKategori[hurufDepan] || 'Z. Lainnya';
+            
+            document.getElementById("editLaporKategori").value = kat;
+            filterJenisEditLapor(); 
+            document.getElementById("editLaporKode").value = pData.kode;
+            updatePoinSanksiEditLapor();
+        }
+    }
+
+    new bootstrap.Modal(document.getElementById("modalEditLaporDynamic")).show();
 }
 
-async function simpanEditLaporan() {
-  const idLog = document.getElementById("editIdLog").value;
-  const kode = document.getElementById("editKodeLapor").value;
-  const keterangan = document.getElementById("editKetLapor").value;
-  const res = await panggilAPI({ aksi: "edit_laporan", idLog, kode, keterangan });
-  if (res.status === "sukses") {
-    bootstrap.Modal.getInstance(document.getElementById("modalEditLapor")).hide();
-    showAlertBS("Sukses", "Laporan berhasil diperbarui", "success"); loadPending();
-  }
+// FUNGSI HELPER
+function filterSiswaEditLapor() {
+    const kls = document.getElementById("editLaporKelas").value;
+    const sel = document.getElementById("editLaporNisn");
+    if(!kls || !window.dataMaster || !window.dataMaster.siswa) { sel.innerHTML = '<option value="">-- Pilih Kelas Dahulu --</option>'; return; }
+    const siswaT = window.dataMaster.siswa.filter(s => s.kelas === kls);
+    sel.innerHTML = '<option value="">-- Pilih Nama Siswa --</option>' + siswaT.map(s => `<option value="${s.nisn || s.username}">${s.nama || s.nama_lengkap}</option>`).join("");
+}
+
+function filterJenisEditLapor() {
+    const kat = document.getElementById("editLaporKategori").value;
+    const selJenis = document.getElementById("editLaporKode");
+    
+    document.getElementById("editLaporPoin").value = "";
+    document.getElementById("editLaporSanksi").value = "";
+
+    if (!kat || !window._kategoriMap[kat]) {
+        selJenis.innerHTML = '<option value="">-- Pilih Kategori Dahulu --</option>';
+        selJenis.disabled = true;
+        return;
+    }
+
+    selJenis.disabled = false;
+    let items = window._kategoriMap[kat];
+    selJenis.innerHTML = '<option value="">-- Pilih Jenis Pelanggaran --</option>' + 
+        items.map(k => `<option value="${k.kode}" data-poin="${k.bobot}" data-sanksi="${k.tindakan}">${k.jenis_pelanggaran} (${k.bobot} Poin)</option>`).join("");
+}
+
+function updatePoinSanksiEditLapor() {
+    const el = document.getElementById("editLaporKode");
+    if(el.selectedIndex > 0) {
+        let opt = el.options[el.selectedIndex];
+        document.getElementById("editLaporPoin").value = opt.getAttribute("data-poin") || "0";
+        document.getElementById("editLaporSanksi").value = opt.getAttribute("data-sanksi") || "-";
+    } else {
+        document.getElementById("editLaporPoin").value = "";
+        document.getElementById("editLaporSanksi").value = "";
+    }
+}
+
+// ================= FUNGSI SIMPAN VALIDASI LAPORAN =================
+async function simpanLengkapLaporan(idLog) {
+    const nisnBaru = document.getElementById("editLaporNisn").value;
+    const kodeBaru = document.getElementById("editLaporKode").value;
+    const ketBaru = document.getElementById("editLaporKeterangan").value;
+    const poinBaru = document.getElementById("editLaporPoin").value;
+
+    if(!nisnBaru) return showAlertBS("Perhatian", "2. Nama Siswa wajib dipilih!", "warning");
+    if(!kodeBaru) return showAlertBS("Perhatian", "4. Jenis Pelanggaran wajib dipilih!", "warning");
+
+    const btn = document.querySelector("#modalEditLaporDynamic .btn-info");
+    if(btn) { 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...'; 
+        btn.disabled = true; 
+    }
+
+    try {
+        // Update data ke database Supabase secara langsung & ubah status menjadi Disetujui
+        const { error } = await supabaseClient.from('log_pelanggaran')
+            .update({
+                nisn: nisnBaru,
+                kode_pelanggaran: kodeBaru,
+                keterangan: ketBaru,
+                poin: parseInt(poinBaru || 0),
+                status: 'Disetujui' // Otomatis masuk ke data sah setelah divalidasi admin
+            })
+            .eq('id_log', idLog);
+
+        if (error) throw error;
+
+        showAlertBS("Berhasil", "Data laporan berhasil divalidasi dan disetujui!", "success");
+        
+        // Tutup modal
+        let modalEl = document.getElementById("modalEditLaporDynamic");
+        let modalObj = bootstrap.Modal.getInstance(modalEl);
+        if(modalObj) modalObj.hide();
+        
+        // Refresh tabel pending admin
+        if(typeof loadPending === 'function') loadPending();
+        
+    } catch (err) {
+        console.error(err);
+        showAlertBS("Gagal", err.message || "Gagal menyimpan data", "error");
+        if(btn) { 
+            btn.innerHTML = '<i class="fa-solid fa-save me-2"></i>Simpan Validasi Data'; 
+            btn.disabled = false; 
+        }
+    }
 }
 
 // ================= 7. ADMIN: KELOLA SISWA =================
@@ -697,17 +930,23 @@ async function loadAllSiswa() {
 
 function filterTabelSiswa() {
   const tb = document.getElementById("tbAllSiswa");
-  const fKelas = document.getElementById("filterSiswaKelas").value;
-  const fSP = document.getElementById("filterSiswaSP").value;
+  const fKelas = document.getElementById("filterSiswaKelas") ? document.getElementById("filterSiswaKelas").value : "";
+  const fSP = document.getElementById("filterSiswaSP") ? document.getElementById("filterSiswaSP").value : "";
+  const fNama = document.getElementById("filterSiswaNama") ? document.getElementById("filterSiswaNama").value.toLowerCase() : "";
   
   let siswaTerfilter = globalDataAllSiswa.filter(s => {
     let cocokKelas = fKelas === "" || s.kelas === fKelas;
+    
     let statusSP = "Aman";
     if (s.poin >= 100) statusSP = "SP 3";
     else if (s.poin >= 75) statusSP = "SP 2";
     else if (s.poin >= 50) statusSP = "SP 1";
     let cocokSP = fSP === "" || statusSP === fSP;
-    return cocokKelas && cocokSP;
+    
+    // Logika pencarian ketik langsung muncul
+    let cocokNama = s.nama.toLowerCase().includes(fNama);
+    
+    return cocokKelas && cocokSP && cocokNama;
   });
   
   if (siswaTerfilter.length === 0) { tb.innerHTML = "<tr><td colspan='7' class='text-center text-muted py-3'>Tidak ada data siswa yang cocok.</td></tr>"; return; }
@@ -1441,10 +1680,29 @@ async function panggilAPI(payload) {
     }
 
     if (aksi === "get_riwayat") {
-      const { data: logs } = await supabaseClient.from('log_pelanggaran').select('*').eq('nisn', payload.nisn).eq('status', 'Disetujui');
-      const { data: kamus } = await supabaseClient.from('kamus_pelanggaran').select('*');
-      let mapKamus = {}; if(kamus) kamus.forEach(k => mapKamus[k.kode] = k.jenis_pelanggaran);
-      return { status: "sukses", data: logs ? logs.map(l => ({ tanggal: l.tanggal, namaPelanggaran: mapKamus[l.kode_pelanggaran] || "Pelanggaran Umum", bobot: l.poin, pelapor: l.pelapor, bukti: l.bukti_link, tahunPelajaran: l.tahun_ajaran })) : [] };
+        const { data: logData, error } = await supabaseClient.from('log_pelanggaran').select('*').eq('nisn', payload.nisn).eq('status', 'Disetujui').order('tanggal', { ascending: false });
+        if (error) return { status: "gagal", pesan: error.message };
+        
+        let riwayat = [];
+        if (logData) {
+            riwayat = logData.map(l => {
+                let pName = "Pelanggaran Tidak Diketahui";
+                let pBobot = 0;
+                let kData = dataMaster.kategori.find(k => k.kode === l.kode_pelanggaran);
+                if (kData) { pName = kData.nama; pBobot = kData.poin; }
+                
+                return {
+                    tanggal: l.tanggal,
+                    namaPelanggaran: pName,
+                    keterangan: l.keterangan || "",
+                    bobot: pBobot,
+                    bukti: l.bukti_link,
+                    // INI DIA TAMBAHANNYA (Sensor nama pelapor jika ada embel-embel [SISWA])
+                    pelapor: (l.pelapor && l.pelapor.startsWith("[SISWA]")) ? "Anonim" : l.pelapor
+                };
+            });
+        }
+        return { status: "sukses", data: riwayat };
     }
 
     if (aksi === "get_all_siswa") {
@@ -1708,6 +1966,43 @@ async function panggilAPI(payload) {
         return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
     }
 
+    if (aksi === "lapor_anonim") {
+        try {
+            const arr = payload.fotoBase64.split(','); const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n);
+            while (n--) u8arr[n] = bstr.charCodeAt(n); const blob = new Blob([u8arr], { type: mime });
+            
+            const namaFile = `lapor_${new Date().getTime()}.jpg`;
+            await supabaseClient.storage.from('tempat-naro-foto').upload(namaFile, blob, { contentType: mime });
+            const { data: urlData } = supabaseClient.storage.from('tempat-naro-foto').getPublicUrl(namaFile);
+
+            // Kode dikosongkan (TBD), Poin 0, NISN sesuai input / UNKNOWN
+            const { error } = await supabaseClient.from('log_pelanggaran').insert([{
+                id_log: "LOG-" + new Date().getTime(), 
+                tanggal: new Date().toISOString(), 
+                
+                // ---- UBAH BARIS INI: Jika UNKNOWN, kirim null (kosong) ----
+                nisn: payload.nisn === "UNKNOWN" ? null : payload.nisn, 
+                
+                kode_pelanggaran: null , 
+                keterangan: payload.keterangan,
+                bukti_link: urlData.publicUrl, 
+                pelapor: payload.pelapor, 
+                status: "Pending", 
+                tahun_ajaran: new Date().getFullYear() + "/" + (new Date().getFullYear() + 1), 
+                poin: 0
+            }]);
+            return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
+        } catch (err) { return { status: "gagal", pesan: err.message }; }
+    }
+
+    if (aksi === "update_log_pelanggaran") {
+        const { error } = await supabaseClient.from('log_pelanggaran')
+                               .update(payload.dataUpdate)
+                               .eq('id_log', payload.idLog);
+        return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
+    }
+
     return { status: "gagal", pesan: "Aksi tidak dikenali API" };
 
   } catch (e) { return { status: "error", pesan: e.message }; }
@@ -1855,10 +2150,46 @@ async function unduhExcelRekapPelanggaran(kelasOverride, bulanOverride) {
     }
 }
 
-// ================= SIMPAN PROFIL SISWA =================
-if (res.status === "sukses") {
+// ================= SIMPAN PROFIL SISWA (LENGKAP & AMAN) =================
+async function simpanProfilSiswa(event) {
+    event.preventDefault();
+    
+    // 1. Ambil data dari form input edit profil
+    const nisn = document.getElementById("profNisn").value;
+    const payloadData = {
+        nama_lengkap: document.getElementById("profNama").value,
+        kelas: document.getElementById("profKelas").value,
+        jenis_kelamin: document.getElementById("profJk").value,
+        tempat_lahir: document.getElementById("profTempatLahir").value,
+        tanggal_lahir: document.getElementById("profTglLahir").value,
+        agama: document.getElementById("profAgama").value,
+        no_hp: document.getElementById("profNoHp").value,
+        email: document.getElementById("profEmail").value,
+        alamat: document.getElementById("profAlamat").value,
+        nama_ayah: document.getElementById("profNamaAyah").value,
+        no_hp_ayah: document.getElementById("profHpAyah").value,
+        nama_ibu: document.getElementById("profNamaIbu").value,
+        no_hp_ibu: document.getElementById("profHpIbu").value
+    };
+
+    // 2. TOMBOL LOADING SUPAYA USER TAHU SEDANG DIPROSES
+    const btnSimpan = document.getElementById("btnSimpanProfilSiswa");
+    if(btnSimpan) { btnSimpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...'; btnSimpan.disabled = true; }
+
+    // 3. INI BAGIAN YANG TADI HILANG: PANGGIL API KE DATABASE SUPABASE
+    const res = await panggilAPI({ 
+        aksi: "update_profil_siswa", 
+        nisn: nisn, 
+        data: payloadData 
+    });
+
+    // Kembalikan tombol seperti semula
+    if(btnSimpan) { btnSimpan.innerHTML = '<i class="fa-solid fa-save me-2"></i>Simpan'; btnSimpan.disabled = false; }
+
+    // 4. CEK HASILNYA (Variabel 'res' sekarang sudah memiliki isi/data)
+    if (res.status === "sukses") {
         showAlertBS("Berhasil", "Data diri berhasil diperbarui!", "success");
-        const p = payload.data;
+        const p = payloadData;
         
         // Update Memori Lokal
         currentUser.nama = p.nama_lengkap;
@@ -1867,31 +2198,31 @@ if (res.status === "sukses") {
         localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
         
         // Update Nama & Kelas di Judul Utama
-        document.getElementById("txtNamaUser").innerText = `${currentUser.nama} (SISWA)`;
-        document.getElementById("txtNamaProfilSiswa").innerText = currentUser.nama;
-        document.getElementById("txtKelasProfilSiswa").innerText = currentUser.kelas;
+        if(document.getElementById("txtNamaUser")) document.getElementById("txtNamaUser").innerText = `${currentUser.nama} (SISWA)`;
+        if(document.getElementById("txtNamaProfilSiswa")) document.getElementById("txtNamaProfilSiswa").innerText = currentUser.nama;
+        if(document.getElementById("txtKelasProfilSiswa")) document.getElementById("txtKelasProfilSiswa").innerText = currentUser.kelas;
         
         // Update Teks di Mode View secara Real-Time
-        document.getElementById("viewNama").innerText = p.nama_lengkap || "-";
-        document.getElementById("viewKelas").innerText = p.kelas || "-";
-        document.getElementById("viewJk").innerText = p.jenis_kelamin === 'L' ? 'Laki-Laki' : (p.jenis_kelamin === 'P' ? 'Perempuan' : '-');
-        document.getElementById("viewTempatLahir").innerText = p.tempat_lahir || "-";
-        document.getElementById("viewTglLahir").innerText = p.tanggal_lahir || "-";
-        document.getElementById("viewAgama").innerText = p.agama || "-";
-        document.getElementById("viewNoHp").innerText = p.no_hp || "-";
-        document.getElementById("viewEmail").innerText = p.email || "-";
-        document.getElementById("viewAlamat").innerText = p.alamat || "-";
-        document.getElementById("viewNamaAyah").innerText = p.nama_ayah || "-";
-        document.getElementById("viewHpAyah").innerText = p.no_hp_ayah || "-";
-        document.getElementById("viewNamaIbu").innerText = p.nama_ibu || "-";
-        document.getElementById("viewHpIbu").innerText = p.no_hp_ibu || "-";
+        if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = p.nama_lengkap || "-";
+        if(document.getElementById("viewKelas")) document.getElementById("viewKelas").innerText = p.kelas || "-";
+        if(document.getElementById("viewJk")) document.getElementById("viewJk").innerText = p.jenis_kelamin === 'L' ? 'Laki-Laki' : (p.jenis_kelamin === 'P' ? 'Perempuan' : '-');
+        if(document.getElementById("viewTempatLahir")) document.getElementById("viewTempatLahir").innerText = p.tempat_lahir || "-";
+        if(document.getElementById("viewTglLahir")) document.getElementById("viewTglLahir").innerText = p.tanggal_lahir || "-";
+        if(document.getElementById("viewAgama")) document.getElementById("viewAgama").innerText = p.agama || "-";
+        if(document.getElementById("viewNoHp")) document.getElementById("viewNoHp").innerText = p.no_hp || "-";
+        if(document.getElementById("viewEmail")) document.getElementById("viewEmail").innerText = p.email || "-";
+        if(document.getElementById("viewAlamat")) document.getElementById("viewAlamat").innerText = p.alamat || "-";
+        if(document.getElementById("viewNamaAyah")) document.getElementById("viewNamaAyah").innerText = p.nama_ayah || "-";
+        if(document.getElementById("viewHpAyah")) document.getElementById("viewHpAyah").innerText = p.no_hp_ayah || "-";
+        if(document.getElementById("viewNamaIbu")) document.getElementById("viewNamaIbu").innerText = p.nama_ibu || "-";
+        if(document.getElementById("viewHpIbu")) document.getElementById("viewHpIbu").innerText = p.no_hp_ibu || "-";
 
         // Tembak kembali ke Mode BACA (View)
         toggleEditProfil(false);
     } else {
-        showAlertBS("Gagal", res.pesan, "error");
+        showAlertBS("Gagal", res.pesan || "Terjadi kesalahan sistem", "error");
     }
-
+}
     // ================= FUNGSI PENGAJUAN IZIN SISWA =================
 function prosesFotoIzin(input) {
     const file = input.files[0];
@@ -2020,4 +2351,75 @@ function exportExcelMatriksAbsensi(data, startDate, endDate, kelasPilih) {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `Absensi_Matriks_${kelasPilih || 'Semua'}.xls`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ================= FUNGSI LAPOR PELANGGARAN SISWA (ANONIM) =================
+function prosesFotoLaporSiswa(input) {
+    const file = input.files[0];
+    if(file) {
+        if(file.size > 2 * 1024 * 1024) { showAlertBS("Perhatian", "Foto maksimal 2 MB!", "warning"); input.value = ""; return; }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            document.getElementById("laporSiswaBuktiBase64").value = reader.result;
+            const prev = document.getElementById("previewLaporSiswa");
+            prev.src = reader.result; prev.style.display = "block";
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function filterSiswaLaporAnonim() {
+    const kls = document.getElementById("laporSiswaKelas").value;
+    const sel = document.getElementById("laporSiswaNama");
+    if(kls === "UNKNOWN") { sel.innerHTML = '<option value="UNKNOWN">-- Tidak Tahu / Lupa --</option>'; return; }
+    
+    const siswaT = dataMaster.siswa.filter(s => s.kelas === kls);
+    sel.innerHTML = '<option value="UNKNOWN">-- Tidak Tahu Namanya --</option>' + siswaT.map(s => `<option value="${s.nisn}">${s.nama}</option>`).join("");
+}
+
+async function kirimLaporanSiswa(e) {
+    e.preventDefault();
+    const btn = document.getElementById("btnKirimLaporSiswa");
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim...'; btn.disabled = true;
+
+    // Kita berikan flag [SISWA] di depan nama agar sistem tahu ini laporan anonim
+    const res = await panggilAPI({
+        aksi: "lapor_anonim",
+        nisn: document.getElementById("laporSiswaNama").value, // Bisa berisi nisn atau "UNKNOWN"
+        keterangan: document.getElementById("laporSiswaKeterangan").value,
+        fotoBase64: document.getElementById("laporSiswaBuktiBase64").value,
+        pelapor: "[SISWA] " + currentUser.nama 
+    });
+
+    if(res.status === "sukses") {
+        showAlertBS("Berhasil", "Laporan terkirim! Admin akan memvalidasi buktinya.", "success");
+        e.target.reset(); document.getElementById("previewLaporSiswa").style.display = "none";
+    } else showAlertBS("Gagal", res.pesan, "error");
+    
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>Kirim Laporan'; btn.disabled = false;
+}
+
+// ================= FUNGSI ISI DROPDOWN KELAS & NAMA UNTUK SISWA =================
+async function isiDropdownLaporSiswa() {
+    // Tarik seluruh data siswa dari database menggunakan API yang sudah ada
+    const res = await panggilAPI({ aksi: "get_all_siswa" });
+    
+    if (res.status === "sukses") {
+        // 1. Buat rumah/variabel dataMaster jika di akun siswa belum ada
+        if (typeof dataMaster === 'undefined') {
+            window.dataMaster = { siswa: [] };
+        }
+        // Simpan data ke dataMaster agar fungsi filter otomatis (yang kemarin kita buat) bisa bekerja
+        dataMaster.siswa = res.data;
+
+        // 2. Saring daftar kelas agar unik (tidak ada kelas yang double)
+        const kelasUnik = [...new Set(res.data.map(s => s.kelas))].filter(k => k && k.trim() !== "");
+        
+        // 3. Masukkan daftar kelas tersebut ke dalam pilihan Dropdown (Select)
+        const elKelas = document.getElementById("laporSiswaKelas");
+        if (elKelas) {
+            elKelas.innerHTML = '<option value="UNKNOWN">-- Tidak Tahu / Lupa --</option>' + 
+                                kelasUnik.sort().map(k => `<option value="${k}">${k}</option>`).join("");
+        }
+    }
 }
