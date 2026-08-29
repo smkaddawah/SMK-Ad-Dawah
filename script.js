@@ -2721,3 +2721,31 @@ function formatTampilTanggal(serial) {
     let parts = tglIso.split('-');
     return `${parts[2]}-${parts[1]}-${parts[0]}`; // Menjadi DD-MM-YYYY
 }
+
+async function hapusLaporanDariRiwayat(idLog, nisn, namaSiswa) {
+    if (!confirm(`Apakah Anda yakin ingin menghapus data pelanggaran untuk ${namaSiswa}?`)) {
+        return;
+    }
+
+    // Ganti 'pelanggaran' di bawah ini dengan nama tabel yang asli di Supabase Anda 
+    // (Contoh: 'log_pelanggaran', 'pelanggaran_siswa', atau 'catatan_pelanggaran')
+    const { error } = await supabaseClient
+        .from('log_pelanggaran') // <--- SESUAIKAN NAMA TABEL DI SINI
+        .delete()
+        .eq('id_log', idLog); // Jika kolom kuncinya bukan 'id', sesuaikan juga (misal: 'id_log')
+
+    if (error) {
+        alert("Gagal menghapus data: " + error.message);
+        console.error("Supabase delete error:", error);
+        return;
+    }
+
+    alert("Data pelanggaran berhasil dihapus!");
+
+    // Refresh ulang tabel riwayat pelanggaran setelah dihapus
+    if (typeof loadRiwayatPelanggaranAdmin === 'function') {
+        loadRiwayatPelanggaranAdmin();
+    } else {
+        location.reload();
+    }
+}
