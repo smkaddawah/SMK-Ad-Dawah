@@ -474,9 +474,41 @@
                 <div class="col-12">
                     <div id="tabStats">
                         <div class="row g-3 mb-4">
-                            <div class="col-md-4"><div class="card bg-primary-green text-white shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-users me-2"></i>Total Siswa</h6><h2 id="statTotalSiswa" class="fw-bold mb-0">0</h2></div></div>
-                            <div class="col-md-4"><div class="card bg-warning text-dark shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-hourglass-half me-2"></i>Laporan Pending</h6><h2 id="statPending" class="fw-bold mb-0">0</h2></div></div>
-                            <div class="col-md-4"><div class="card bg-danger text-white shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-triangle-exclamation me-2"></i>Siswa Kritis (SP)</h6><h2 id="statKritis" class="fw-bold mb-0">0</h2></div></div>
+                           <!-- KARTU 1: TOTAL SISWA (Mengarah ke Data Master Siswa) -->
+<div class="col-md-4">
+    <div class="card bg-primary-green text-white shadow-sm border-0 rounded-4 p-3 card-stat" 
+         style="cursor: pointer; transition: transform 0.2s;" 
+         onmouseover="this.style.transform='scale(1.03)'" 
+         onmouseout="this.style.transform='scale(1)'" 
+         onclick="switchAdminTab('siswa')"> <!-- Ganti 'master' dengan ID/Parameter menu master siswa Anda jika berbeda -->
+        <h6 class="fw-normal"><i class="fa-solid fa-users me-2"></i>Total Siswa</h6>
+        <h2 id="statTotalSiswa" class="fw-bold mb-0">0</h2>
+    </div>
+</div>
+
+<!-- KARTU 2: LAPORAN PENDING (Mengarah ke Antrean Verifikasi) -->
+<div class="col-md-4">
+    <div class="card bg-warning text-dark shadow-sm border-0 rounded-4 p-3 card-stat" 
+         style="cursor: pointer; transition: transform 0.2s;" 
+         onmouseover="this.style.transform='scale(1.03)'" 
+         onmouseout="this.style.transform='scale(1)'" 
+         onclick="switchAdminTab('verif')"> <!-- Sesuai dengan id="tabVerif" Anda -->
+        <h6 class="fw-normal"><i class="fa-solid fa-hourglass-half me-2"></i>Laporan Pending</h6>
+        <h2 id="statPending" class="fw-bold mb-0">0</h2>
+    </div>
+</div>
+
+<!-- KARTU 3: SISWA KRITIS (Mengarah ke Riwayat Pelanggaran) -->
+<div class="col-md-4">
+    <div class="card bg-danger text-white shadow-sm border-0 rounded-4 p-3 card-stat" 
+         style="cursor: pointer; transition: transform 0.2s;" 
+         onmouseover="this.style.transform='scale(1.03)'" 
+         onmouseout="this.style.transform='scale(1)'" 
+         onclick="switchAdminTab('siswa')"> <!-- Ganti 'riwayat' dengan parameter menu Riwayat Pelanggaran Anda jika berbeda -->
+        <h6 class="fw-normal"><i class="fa-solid fa-triangle-exclamation me-2"></i>Siswa Kritis (SP)</h6>
+        <h2 id="statKritis" class="fw-bold mb-0">0</h2>
+    </div>
+</div>
                             <!-- KARTU REKAPITULASI SISWA -->
 <div class="card shadow-sm border-0 rounded-4 p-4 mt-4 bg-white">
     <h5 class="fw-bold mb-3"><i class="fa-solid fa-users text-success me-2"></i>Rekapitulasi Jumlah Siswa</h5>
