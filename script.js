@@ -661,7 +661,12 @@ async function loadStats() {
       },
       options: { responsive: true, plugins: { legend: { display: false } } }
     });
-  }
+    }
+    
+    // Di dalam fungsi pemuatan Admin Anda...
+if (typeof loadRekapSiswa === 'function') {
+    loadRekapSiswa();
+}
 }
 
 async function verifikasi(idLog, keputusan, isUnknown = false) {
@@ -2789,5 +2794,135 @@ async function hapusLaporanDariRiwayat(idLog, nisn, namaSiswa) {
         loadRiwayatPelanggaranAdmin();
     } else {
         location.reload();
+    }
+}
+
+// ================= FUNGSI REKAPITULASI SISWA =================
+async function loadRekapSiswa() {
+    const tb = document.getElementById('tbRekapSiswa');
+    const tf = document.getElementById('tfRekapSiswa');
+    if (!tb) return;
+
+    tb.innerHTML = `<tr><td colspan="6" class="text-center py-4"><i class="fa-solid fa-spinner fa-spin text-success me-2"></i>Menghitung rekapitulasi...</td></tr>`;
+
+    // 1. Ambil SEMUA data siswa (Bypass limit 1000 Supabase)
+    let allSiswa = [];
+    let hasMore = true;
+    let start = 0;
+    const step = 1000;
+
+    while (hasMore) {
+        const { data, error } = await supabaseClient
+            .from('users')
+            .select('kelas, jenis_kelamin')
+            .eq('role', 'siswa')
+            .range(start, start + step - 1);
+            
+        if (error) {
+            console.error("Error tarik rekap:", error);
+            tb.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Gagal memuat rekapitulasi.</td></tr>`;
+            return;
+        }
+        
+        if (data && data.length > 0) {
+            allSiswa.push(...data);
+            start += step;
+            if (data.length < step) hasMore = false;
+        } else {
+            hasMore = false;
+        }
+    }
+
+    // 2. Siapkan Wadah Kelompok Tingkatan
+    let rekap = {
+        'X': { totalTingkatan: 0, classes: {} },
+        'XI': { totalTingkatan: 0, classes: {} },
+        'XII': { totalTingkatan: 0, classes: {} }
+    };
+
+    let grandTotalL = 0;
+    let grandTotalP = 0;
+
+    // 3. Proses Perhitungan Data
+    allSiswa.forEach(s => {
+        let kelasRaw = (s.kelas || "").trim().toUpperCase();
+        let jk = (s.jenis_kelamin || "").toUpperCase();
+        
+        // Deteksi Tingkatan
+        let tingkatan = null;
+        if (kelasRaw.startsWith('XII')) tingkatan = 'XII';
+        else if (kelasRaw.startsWith('XI')) tingkatan = 'XI';
+        else if (kelasRaw.startsWith('X')) tingkatan = 'X';
+        
+        // Abaikan jika kelas tidak valid atau sudah LULUS
+        if (!tingkatan) return; 
+        
+        if (!rekap[tingkatan].classes[kelasRaw]) {
+            rekap[tingkatan].classes[kelasRaw] = { L: 0, P: 0, total: 0 };
+        }
+
+        // Hitung Laki & Perempuan
+        if (jk === 'L' || jk === 'LAKI-LAKI') {
+            rekap[tingkatan].classes[kelasRaw].L++;
+            grandTotalL++;
+        } else if (jk === 'P' || jk === 'PEREMPUAN') {
+            rekap[tingkatan].classes[kelasRaw].P++;
+            grandTotalP++;
+        }
+
+        rekap[tingkatan].classes[kelasRaw].total++;
+        rekap[tingkatan].totalTingkatan++;
+    });
+
+    // 4. Melukis Tabel HTML dengan Rowspan (Mewujudkan desain gambar)
+    let htmlBody = '';
+    let nomor = 1;
+    const urutanTingkatan = ['X', 'XI', 'XII']; 
+
+    urutanTingkatan.forEach(tingkat => {
+        let dataTingkat = rekap[tingkat];
+        if (dataTingkat && Object.keys(dataTingkat.classes).length > 0) {
+            
+            // Urutkan kelas sesuai abjad (AKL, BDP, TKJ, dll)
+            let sortedClasses = Object.keys(dataTingkat.classes).sort();
+            let rowCount = sortedClasses.length; // Untuk penentuan rowspan
+
+            sortedClasses.forEach((namaKelas, index) => {
+                let c = dataTingkat.classes[namaKelas];
+                
+                htmlBody += `<tr>
+                    <td>${nomor++}</td>
+                    <td class="text-start">${namaKelas}</td>
+                    <td>${c.L}</td>
+                    <td>${c.P}</td>
+                    <td class="fw-bold">${c.total}</td>`;
+                
+                // ROWSPAN AJAIB: Hanya di-render di baris pertama pada setiap tingkatan
+                if (index === 0) {
+                    htmlBody += `<td rowspan="${rowCount}" class="fw-bold align-middle fs-5">${dataTingkat.totalTingkatan}</td>`;
+                }
+                
+                htmlBody += `</tr>`;
+            });
+        }
+    });
+
+    let grandTotalSemua = grandTotalL + grandTotalP;
+
+    // 5. Suntikkan ke HTML
+    if (htmlBody === '') {
+        tb.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-4">Belum ada data siswa aktif.</td></tr>`;
+        tf.innerHTML = '';
+    } else {
+        tb.innerHTML = htmlBody;
+        tf.innerHTML = `
+            <tr>
+                <td colspan="2" class="text-center">JUMLAH</td>
+                <td class="text-center">${grandTotalL}</td>
+                <td class="text-center">${grandTotalP}</td>
+                <td class="text-center">${grandTotalSemua}</td>
+                <td class="text-center fs-5">${grandTotalSemua}</td>
+            </tr>
+        `;
     }
 }

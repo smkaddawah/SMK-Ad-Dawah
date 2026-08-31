@@ -477,6 +477,33 @@
                             <div class="col-md-4"><div class="card bg-primary-green text-white shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-users me-2"></i>Total Siswa</h6><h2 id="statTotalSiswa" class="fw-bold mb-0">0</h2></div></div>
                             <div class="col-md-4"><div class="card bg-warning text-dark shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-hourglass-half me-2"></i>Laporan Pending</h6><h2 id="statPending" class="fw-bold mb-0">0</h2></div></div>
                             <div class="col-md-4"><div class="card bg-danger text-white shadow-sm border-0 rounded-4 p-3 card-stat"><h6 class="fw-normal"><i class="fa-solid fa-triangle-exclamation me-2"></i>Siswa Kritis (SP)</h6><h2 id="statKritis" class="fw-bold mb-0">0</h2></div></div>
+                            <!-- KARTU REKAPITULASI SISWA -->
+<div class="card shadow-sm border-0 rounded-4 p-4 mt-4 bg-white">
+    <h5 class="fw-bold mb-3"><i class="fa-solid fa-users text-success me-2"></i>Rekapitulasi Jumlah Siswa</h5>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover text-center align-middle mb-0" style="border-color: #dee2e6;">
+            <thead class="table-light">
+                <tr>
+                    <th rowspan="2" class="align-middle">NO</th>
+                    <th rowspan="2" class="align-middle text-start">KELAS</th>
+                    <th colspan="2" class="text-center">JENIS KELAMIN</th>
+                    <th rowspan="2" class="align-middle">JUMLAH</th>
+                    <th rowspan="2" class="align-middle">TOTAL PER TINGKATAN</th>
+                </tr>
+                <tr>
+                    <th class="text-center" style="width: 80px;">L</th>
+                    <th class="text-center" style="width: 80px;">P</th>
+                </tr>
+            </thead>
+            <tbody id="tbRekapSiswa">
+                <tr><td colspan="6" class="text-muted py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i>Menghitung data siswa...</td></tr>
+            </tbody>
+            <tfoot id="tfRekapSiswa" class="table-light fw-bold">
+                <!-- Baris jumlah total akan masuk ke sini -->
+            </tfoot>
+        </table>
+    </div>
+</div>
                         </div>
 
                         <div class="card shadow-sm border-0 rounded-4 p-4 bg-white mb-4"><h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-layer-group text-primary-green me-2"></i>Jumlah Pelanggaran Per Kelas</h5><div class="row g-3" id="wadahCardKelas"></div></div>
