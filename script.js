@@ -1793,16 +1793,58 @@ async function panggilAPI(payload) {
     }
 
     if (aksi === "kenaikan_kelas") {
-      const { data: users } = await supabaseClient.from('users').select('*').eq('role', 'siswa');
-      if (users) {
-         for (let u of users) {
-             let k = (u.kelas || "").toUpperCase();
-             if (k.includes("XII")) k = "LULUS"; else if (k.includes("XI")) k = k.replace("XI", "XII"); else if (k.includes("X")) k = k.replace("X", "XI");
-             await supabaseClient.from('users').update({ kelas: k }).eq('username', u.username);
-         }
-      }
-      return { status: "sukses" };
+    // 1. Tarik semua data siswa tanpa terhalang limit 1000 baris Supabase
+    let allUsers = [];
+    let hasMore = true;
+    let start = 0;
+    const step = 1000;
+
+    while (hasMore) {
+        const { data } = await supabaseClient
+            .from('users')
+            .select('kelas') // Hanya ambil kolom kelas agar super cepat
+            .eq('role', 'siswa')
+            .range(start, start + step - 1);
+            
+        if (data && data.length > 0) {
+            allUsers.push(...data);
+            start += step;
+            if (data.length < step) hasMore = false;
+        } else {
+            hasMore = false;
+        }
     }
+
+    // 2. Kumpulkan semua nama kelas yang ada (biar tidak ada yang terlewat)
+    const uniqueClasses = [...new Set(allUsers.map(u => u.kelas).filter(k => k))];
+
+    // 3. Kelompokkan kelas secara spesifik agar tidak salah sasaran
+    let kelasXII = uniqueClasses.filter(k => k.toUpperCase().includes("XII"));
+    let kelasXI  = uniqueClasses.filter(k => k.toUpperCase().includes("XI") && !k.toUpperCase().includes("XII"));
+    let kelasX   = uniqueClasses.filter(k => k.toUpperCase().includes("X") && !k.toUpperCase().includes("XI") && !k.toUpperCase().includes("XII"));
+
+    // 4. EKSEKUSI TOP-DOWN (Atas ke Bawah) SECARA BULK
+    // Ratusan/Ribuan siswa akan terupdate hanya dalam waktu 1-2 detik!
+    
+    // A. LULUSKAN KELAS XII TERLEBIH DAHULU (Kosongkan gerbong paling atas)
+    for (let k of kelasXII) {
+        await supabaseClient.from('users').update({ kelas: 'LULUS' }).eq('kelas', k).eq('role', 'siswa');
+    }
+
+    // B. NAIKKAN KELAS XI KE XII
+    for (let k of kelasXI) {
+        let newK = k.toUpperCase().replace("XI", "XII");
+        await supabaseClient.from('users').update({ kelas: newK }).eq('kelas', k).eq('role', 'siswa');
+    }
+
+    // C. NAIKKAN KELAS X KE XI
+    for (let k of kelasX) {
+        let newK = k.toUpperCase().replace("X", "XI");
+        await supabaseClient.from('users').update({ kelas: newK }).eq('kelas', k).eq('role', 'siswa');
+    }
+
+    return { status: "sukses" };
+}
 
     if (aksi === "get_rekap_laporan") {
       const { data: logs } = await supabaseClient.from('log_pelanggaran').select('*').eq('status', 'Disetujui');
