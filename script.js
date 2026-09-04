@@ -254,32 +254,96 @@ function setupFileInput(inputId, previewId, hiddenId) {
 }
 
 // ================= 2. FUNGSI LOGIN & NAVIGASI =================
-async function handleLogin(e) {
-  e.preventDefault();
-  const btn = document.getElementById("btnLogin");
-  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Memproses...';
-  
-  const role = document.getElementById("loginRole").value;
-  const username = document.getElementById("loginUser").value;
-  const password = document.getElementById("loginPass").value;
-  
-  try {
-    const res = await panggilAPI({ aksi: "login", role, username, password });
-    if (res.status === "sukses") {
-      localStorage.setItem("sesi_addawah", JSON.stringify(res));
-      aktifkanTampilanUser(res);
-      showAlertBS("Login Berhasil!", `Selamat datang kembali, ${res.nama}!`, "success");
-    } else {
-      showAlertBS("Login Gagal!", res.pesan, "error");
+async function handleLogin(event) {
+    if (event) event.preventDefault();
+    
+    // Ambil nilai input dari form
+    const roleInput = document.getElementById('loginRole').value;
+    const userInput = document.getElementById('loginUser').value.trim();
+    const passInput = document.getElementById('loginPass').value.trim();
+    const btnLogin = document.getElementById('btnLogin');
+    
+    // Ubah tombol jadi loading agar user tahu sistem sedang bekerja
+    if (btnLogin) {
+        btnLogin.disabled = true;
+        btnLogin.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Memproses...';
     }
- } catch(err) { 
-    console.error("ERROR LOGIN DETECTED:", err); // TAMBAHKAN INI
-    showAlertBS("Error Server", "Terjadi kesalahan koneksi sistem.", "error"); 
-  }
+
+    try {
+        // Query ke tabel Supabase 'users'
+        // Kita cari berdasarkan username/identitas dan role-nya
+        let { data, error } = await supabaseClient
+            .from('users')
+            .select('*')
+            .eq('username', userInput)
+            .eq('role', roleInput)
+            .single();
+
+        if (error || !data) {
+            throw new Error("Akun tidak ditemukan atau role/ID salah!");
+        }
+
+        // Cek password (mendukung tipe data string maupun angka)
+        if (String(data.password) !== String(passInput)) {
+            throw new Error("Kata sandi salah! Silakan coba lagi.");
+        }
+
+        // --- LOGIN BERHASIL ---
+        currentUser = data; // Set variabel global user yang aktif
+
+        // Ambil data sesi ringkas untuk disimpan ke localStorage (Mencegah QuotaExceededError)
+        let sesiData = {
+            username: data.username,
+            nama_lengkap: data.nama_lengkap || data.nama,
+            role: data.role,
+            kelas: data.kelas,
+            identitas: data.username
+        };
+
+        try {
+            localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
+        } catch (storageErr) {
+            localStorage.clear();
+            localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
+        }
+
+        // Sembunyikan form login, tampilkan dashboard mobile
+        document.getElementById('loginSection').style.display = 'none';
+        
+        // Panggil render menu utama sesuai role
+        if (typeof renderGridMenuApp === 'function') {
+            renderGridMenuApp(data.role, data.username, data.pin_bawah);
+        } else {
+            location.reload(); // Fallback jika fungsi render belum siap
+        }
+
+    } catch (err) {
+        console.error("ERROR LOGIN DETECTED:", err.message);
+        
+        // Tampilkan pesan error menggunakan Modal Bootstrap yang sudah ada
+        if (typeof showAlertBS === 'function') {
+            showAlertBS("Gagal Masuk", err.message, "danger");
+        } else {
+            alert(err.message);
+        }
+        
+    } finally {
+        // PENTING: Kembalikan tombol login ke kondisi normal (bisa diklik lagi meskipun salah password)
+        if (btnLogin) {
+            btnLogin.disabled = false;
+            btnLogin.innerHTML = '<i class="fa-solid fa-right-to-bracket me-2"></i>Masuk ke Sistem';
+        }
+    }
 }
 
 function aktifkanTampilanUser(res) {
     currentUser = res;
+
+    // Set nama user di header app
+if(document.getElementById('txtAppNamaUser')) document.getElementById('txtAppNamaUser').innerText = res.nama;
+
+// Render tampilan utama Mobile App
+renderGridMenuApp(res.role, res.identitas, res.rawData.pin_bawah);
     
     if(document.getElementById("loginSection")) document.getElementById("loginSection").style.display = "none";
     if(document.getElementById("userBadge")) document.getElementById("userBadge").style.setProperty("display", "flex", "important");
@@ -447,40 +511,42 @@ function toggleEditProfil(isEdit) {
 }
 
 // ================= FITUR UPLOAD FOTO PROFIL SISWA =================
-async function previewDanUploadFotoSiswa(input) {
+async function previewDanUploadFotoGuru(input) {
     const file = input.files[0];
     if (!file) return;
     
-    // Validasi ukuran foto (Maksimal 2 MB)
-    if (file.size > 2 * 1024 * 1024) {
-        return showAlertBS("Perhatian", "Ukuran foto terlalu besar! Maksimal 2 MB.", "warning");
-    }
-
-    const labelStatus = document.getElementById("statusUploadFotoSiswa");
-    labelStatus.innerHTML = '<span class="text-primary"><i class="fa-solid fa-spinner fa-spin me-1"></i> Sedang mengunggah foto...</span>';
+    document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-warning'><i class='fa-solid fa-spinner fa-spin me-1'></i>Mengunggah foto...</span>";
     
     const reader = new FileReader();
-    reader.onloadend = async function() {
-        // 1. Tampilkan preview langsung di layar siswa agar terasa cepat
-        document.getElementById("imgProfilSiswa").src = reader.result;
+    reader.onload = async function(e) {
+        let rawBase64 = e.target.result;
+        document.getElementById('imgProfilGuru').src = rawBase64;
         
-        // 2. Panggil API untuk menyimpan ke Supabase
-        const res = await panggilAPI({ 
-            aksi: "upload_foto_profil", 
-            username: currentUser.identitas, 
-            fotoBase64: reader.result 
-        });
-        
-        if (res.status === "sukses") {
-            labelStatus.innerHTML = '<span class="text-success"><i class="fa-solid fa-check me-1"></i> Foto berhasil diperbarui!</span>';
-            // Update memori sesi di HP/Laptop siswa
-            currentUser.foto_profil = res.url;
-            localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+        try {
+            // Ambil identifier yang valid untuk guru/walas
+            let identifier = currentUser.username || currentUser.identitas;
             
-            setTimeout(() => { labelStatus.innerHTML = ''; }, 3000);
-        } else {
-            labelStatus.innerHTML = '<span class="text-danger"><i class="fa-solid fa-xmark me-1"></i> Gagal mengunggah.</span>';
-            showAlertBS("Error Upload", res.pesan, "error");
+            // Coba update berdasarkan username terlebih dahulu
+            let { error } = await supabaseClient
+                .from('users')
+                .update({ foto: rawBase64 })
+                .eq('username', identifier);
+                
+            // Jika gagal karena kolom username tidak ada/beda, coba pakai 'identitas'
+            if (error) {
+                let { error: err2 } = await supabaseClient
+                    .from('users')
+                    .update({ foto: rawBase64 })
+                    .eq('identitas', identifier);
+                if (err2) throw err2;
+            }
+            
+            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-success'><i class='fa-solid fa-check me-1'></i>Foto sukses tersimpan!</span>";
+            currentUser.foto = rawBase64; 
+            
+        } catch (err) {
+            console.error("Error Simpan Foto:", err);
+            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-danger'>Gagal menyimpan ke database. Cek console.</span>";
         }
     };
     reader.readAsDataURL(file);
@@ -2924,5 +2990,615 @@ async function loadRekapSiswa() {
                 <td class="text-center fs-5">${grandTotalSemua}</td>
             </tr>
         `;
+    }
+}
+
+// =====================================================================
+// KONFIGURASI NATIVE MOBILE APP & FITUR PIN (MODAL BOOTSTRAP)
+// =====================================================================
+
+// 1. DAFTAR SELURUH MENU APLIKASI
+const daftarMenuApp = {
+    // --- MENU ADMIN ---
+    'admin_stats': { judul: 'Dashboard', icon: 'fa-chart-pie', color: 'bg-primary' },
+    'admin_verif': { judul: 'Antrean Lapor', icon: 'fa-clipboard-check', color: 'bg-warning text-dark' },
+    'admin_lapor': { judul: 'Buat Laporan', icon: 'fa-plus-circle', color: 'bg-success' },
+    'admin_siswa': { judul: 'Kelola Siswa', icon: 'fa-users-gear', color: 'bg-info text-white' },
+    'admin_guru': { judul: 'Data Guru', icon: 'fa-chalkboard-user', color: 'bg-primary' },
+    'admin_kamus': { judul: 'Kamus SP', icon: 'fa-book', color: 'bg-secondary' },
+    'admin_rekap': { judul: 'Rekap SP', icon: 'fa-file-pdf', color: 'bg-danger' },
+    'admin_rekapabsen': { judul: 'Rekap Absen', icon: 'fa-calendar-days', color: 'bg-info text-white' },
+    'admin_absensi': { judul: 'Sistem QR', icon: 'fa-qrcode', color: 'bg-primary' },
+    'admin_cetakqr': { judul: 'Cetak QR', icon: 'fa-print', color: 'bg-dark' },
+
+    // --- MENU SISWA ---
+    'siswa_profil': { judul: 'Profil', icon: 'fa-user-astronaut', color: 'bg-primary' },
+    'siswa_logabsen': { judul: 'Log Absensi', icon: 'fa-fingerprint', color: 'bg-success' },
+    'siswa_pelanggaran': { judul: 'Pelanggaran', icon: 'fa-triangle-exclamation', color: 'bg-danger' },
+    'siswa_izin': { judul: 'Pengajuan Izin', icon: 'fa-envelope-open-text', color: 'bg-warning text-dark' },
+    'siswa_lapor': { judul: 'Lapor Anonim', icon: 'fa-bullhorn', color: 'bg-info text-white' },
+    'siswa_poin': { judul: 'Cek Poin', icon: 'fa-shield-halved', color: 'bg-success' },
+
+    // --- MENU GURU ---
+    'guru_profil': { judul: 'Profil & QR', icon: 'fa-qrcode', color: 'bg-primary' },
+    'guru_logabsen': { judul: 'Log Absen', icon: 'fa-calendar-check', color: 'bg-success' },
+    'guru_lapor': { judul: 'Form Lapor', icon: 'fa-pen-to-square', color: 'bg-danger' },
+
+    // --- MENU WALI KELAS ---
+    'wali_siswa': { judul: 'Data Kelas', icon: 'fa-users', color: 'bg-primary' },
+    'wali_absensi': { judul: 'Absen Kelas', icon: 'fa-calendar-days', color: 'bg-info text-white' },
+    'wali_izin': { judul: 'Antrean Izin', icon: 'fa-list-check', color: 'bg-warning text-dark' }
+};
+
+// 2. PEMBAGIAN HAK AKSES MENU SESUAI ROLE
+const menuPerRole = {
+    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr'],
+    'siswa': ['siswa_profil', 'siswa_logabsen', 'siswa_pelanggaran', 'siswa_izin', 'siswa_lapor', 'siswa_poin'],
+    'guru': ['guru_profil', 'guru_logabsen', 'guru_lapor'],
+    'walikelas': ['wali_siswa', 'wali_absensi', 'wali_izin']
+};
+
+let userPinBawah = ['home']; 
+let selectedMenuForPin = null;
+
+// 3. FUNGSI MENGGAMBAR GRID ICONS
+function renderGridMenuApp(role, usernameDb, pinDatabaseText) {
+    document.getElementById("mobileAppDashboard").style.display = "block";
+    document.getElementById("halamanFiturApp").style.display = "none";
+    
+    try { userPinBawah = pinDatabaseText ? JSON.parse(pinDatabaseText) : ['home']; } 
+    catch(e) { userPinBawah = ['home']; }
+
+    const wadah = document.getElementById("wadahGridMenu");
+    let htmlMenu = '';
+    
+    // PENGGABUNGAN MENU (WALI KELAS DAPAT FITUR GURU)
+    let menuUserIni = menuPerRole[role] || [];
+    if (role === 'walikelas') {
+        // Jika Wali Kelas, gabungkan array menu Guru dan Wali Kelas!
+        menuUserIni = [...menuPerRole['guru'], ...menuPerRole['walikelas']];
+    }
+    
+    menuUserIni.forEach(idMenu => {
+        let menu = daftarMenuApp[idMenu];
+        if(!menu) return;
+        let divId = "menuGrid_" + idMenu;
+        htmlMenu += `
+        <div class="col-4 col-md-3">
+            <div class="menu-icon-box" id="${divId}" style="cursor: pointer;">
+                <div class="${menu.color} menu-icon-bg mb-2" onclick="bukaHalamanApp('${idMenu}', '${menu.judul}')">
+                    <i class="fa-solid ${menu.icon} fs-2 text-white"></i>
+                </div>
+                <h6 class="fw-bold text-dark" style="font-size: 0.75rem;" onclick="bukaHalamanApp('${idMenu}', '${menu.judul}')">${menu.judul}</h6>
+            </div>
+        </div>`;
+    });
+    
+    wadah.innerHTML = htmlMenu;
+    menuUserIni.forEach(idMenu => {
+        let menu = daftarMenuApp[idMenu];
+        let el = document.getElementById("menuGrid_" + idMenu);
+        if (el && menu) pasangEventPin(el, idMenu, menu.judul);
+    });
+
+    renderBottomNavBar();
+    cekSmartAlert(role); // Jalankan alert cerdas
+}
+
+// 4. HELPER EVENT PIN (KLIK KANAN & LONG-PRESS)
+function pasangEventPin(elemenDiv, idMenu, judulMenu) {
+    elemenDiv.oncontextmenu = function(e) {
+        tanyaPinMenu(e, idMenu, judulMenu);
+        return false;
+    };
+
+    let pressTimer = null;
+    elemenDiv.ontouchstart = function(e) {
+        pressTimer = setTimeout(() => {
+            tanyaPinMenu(e, idMenu, judulMenu);
+        }, 600);
+    };
+    elemenDiv.ontouchend = function() { clearTimeout(pressTimer); };
+    elemenDiv.ontouchmove = function() { clearTimeout(pressTimer); };
+}
+
+// 5. MEMICU MODAL BOOTSTRAP UNTUK PIN/UNPIN
+function tanyaPinMenu(event, idMenu, judulMenu) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    selectedMenuForPin = idMenu;
+    let isPinned = userPinBawah.includes(idMenu);
+    let aksiText = isPinned ? "melepas" : "menyematkan";
+    
+    const textEl = document.getElementById("confirmTextBS");
+    if (textEl) {
+        textEl.innerHTML = `Apakah Anda ingin <b>${aksiText}</b> menu <b>${judulMenu}</b> pada Bar Navigasi Bawah?`;
+    }
+    
+    const btnYes = document.getElementById("btnConfirmYesBS");
+    if (btnYes) {
+        btnYes.onclick = function() {
+            eksekusiPinMenu(selectedMenuForPin);
+            let modalEl = document.getElementById('modalConfirmBS');
+            let modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+        };
+    }
+    
+    let myModal = new bootstrap.Modal(document.getElementById('modalConfirmBS'));
+    myModal.show();
+}
+
+async function eksekusiPinMenu(idMenu) {
+    let isPinned = userPinBawah.includes(idMenu);
+    
+    if(isPinned) {
+        userPinBawah = userPinBawah.filter(id => id !== idMenu);
+    } else {
+        if(userPinBawah.length >= 5) {
+            alert("Maksimal hanya 5 menu di Bar Bawah agar tidak sesak.");
+            return;
+        }
+        userPinBawah.push(idMenu);
+    }
+    
+    renderBottomNavBar();
+    
+    let nisn = currentUser.identitas || currentUser.username;
+    if (nisn) {
+        await supabaseClient.from('users').update({ pin_bawah: JSON.stringify(userPinBawah) }).eq('username', nisn);
+    }
+}
+
+// 6. RENDER BOTTOM NAV BAR
+function renderBottomNavBar() {
+    const bottomWadah = document.getElementById("bottomNavBar");
+    if (!bottomWadah) return;
+    
+    let htmlBottom = '';
+    userPinBawah.forEach(idMenu => {
+        if(idMenu === 'home') {
+            htmlBottom += `
+            <div class="bottom-nav-item text-success" onclick="kembaliKeHome()">
+                <i class="fa-solid fa-house bottom-nav-icon"></i>
+                <div class="bottom-nav-text">HOME</div>
+            </div>`;
+        } else if (daftarMenuApp[idMenu]) {
+            let m = daftarMenuApp[idMenu];
+            htmlBottom += `
+            <div class="bottom-nav-item text-secondary" onclick="bukaHalamanApp('${idMenu}', '${m.judul}')" oncontextmenu="tanyaPinMenu(event, '${idMenu}','${m.judul}'); return false;">
+                <i class="fa-solid ${m.icon} bottom-nav-icon"></i>
+                <div class="bottom-nav-text text-truncate px-1">${m.judul}</div>
+            </div>`;
+        }
+    });
+    bottomWadah.innerHTML = htmlBottom;
+}
+
+// 7. ROUTING MENU TERHUBUNG PENUH DENGAN FUNGSI ASLI (MENGATASI DATA TIDAK MUNCUL)
+// =====================================================================
+// 1. SISTEM PENGECOH (TUMBAL) AGAR SCRIPT LAMA TIDAK ERROR / CRASH
+// =====================================================================
+(function pasangTumbalUI() {
+    window.addEventListener('DOMContentLoaded', () => {
+        const dummyIds = [
+            'adminSection', 'siswaSection', 'guruSection', 'walikelasSection',
+            'judulMenuAktif', 'slidePanelAdmin', 
+            'adminTabs', 'siswaTabs', 'guruTabs', 'walikelasTabs', 'navbar'
+        ];
+        
+        const container = document.createElement('div');
+        container.style.display = 'none';
+        container.id = 'wadahTumbalRahasia';
+        
+        // Buat elemen palsu agar JS bawaan tidak menangis mencari elemen hilang
+        dummyIds.forEach(id => {
+            if(!document.getElementById(id)) {
+                let el = document.createElement('div');
+                el.id = id;
+                container.appendChild(el);
+            }
+        });
+        document.body.appendChild(container);
+
+        // Mencegah error Offcanvas bootstrap saat menu lama berusaha ditutup oleh sistem
+        try {
+            let panel = document.getElementById('slidePanelAdmin');
+            if (panel && typeof bootstrap !== 'undefined') {
+                panel.className = 'offcanvas'; 
+                new bootstrap.Offcanvas(panel);
+            }
+        } catch(e) {}
+    });
+})();
+
+function renderQRGuruMobile() {
+    if(!currentUser) return;
+    document.getElementById('lblNamaGuruQR').innerText = currentUser.nama || currentUser.username;
+    document.getElementById('lblIdGuruQR').innerText = currentUser.identitas || currentUser.username;
+    
+    // Tampilkan foto jika sudah pernah upload
+    if(currentUser.foto) {
+        document.getElementById('imgProfilGuru').src = currentUser.foto;
+    }
+    
+    // Buat QR Code
+    let qrContainer = document.getElementById('qrCodeGuru');
+    qrContainer.innerHTML = ""; // Bersihkan QR sebelumnya agar tidak dobel
+    new QRCode(qrContainer, {
+        text: currentUser.identitas || currentUser.username,
+        width: 150,
+        height: 150,
+        colorDark : "#198754", // Warna hijau Addawah
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+}
+
+async function previewDanUploadFotoGuru(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-warning'><i class='fa-solid fa-spinner fa-spin me-1'></i>Mengunggah foto...</span>";
+    
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        let rawBase64 = e.target.result;
+        document.getElementById('imgProfilGuru').src = rawBase64;
+        
+        try {
+            let identifier = currentUser.username || currentUser.identitas;
+            
+            // PERBAIKAN: Gunakan kolom 'foto_profil' sesuai struktur tabel Anda
+            let { error } = await supabaseClient
+                .from('users')
+                .update({ foto_profil: rawBase64 })
+                .eq('username', identifier);
+                
+            if (error) {
+                let { error: err2 } = await supabaseClient
+                    .from('users')
+                    .update({ foto_profil: rawBase64 })
+                    .eq('identitas', identifier);
+                if (err2) throw err2;
+            }
+            
+            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-success'><i class='fa-solid fa-check me-1'></i>Foto sukses tersimpan!</span>";
+            currentUser.foto_profil = rawBase64; 
+            currentUser.foto = rawBase64; // Fallback
+            
+        } catch (err) {
+            console.error("Error Simpan Foto:", err);
+            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-danger'>Gagal menyimpan ke database.</span>";
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+async function loadLogAbsenGuruMobile() {
+    let tb = document.getElementById('tbRiwayatAbsenGuru');
+    if(!tb) return;
+    tb.innerHTML = '<tr><td colspan="4" class="text-center py-4"><i class="fa-solid fa-spinner fa-spin fs-3 text-primary mb-2"></i><br>Memuat riwayat...</td></tr>';
+    
+    let nisn = currentUser.identitas || currentUser.username;
+    const { data, error } = await supabaseClient.from('log_absensi').select('*').eq('username', nisn).order('tanggal', { ascending: false }).limit(30);
+    
+    if(error || !data || data.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">Belum ada riwayat absensi Anda.</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(d => {
+        let status = d.waktu_pulang ? '<span class="badge bg-success">Selesai</span>' : '<span class="badge bg-warning text-dark">Belum Pulang</span>';
+        html += `<tr>
+            <td class="small fw-bold">${d.tanggal}</td>
+            <td class="text-success fw-bold">${d.waktu_masuk || '-'}</td>
+            <td class="text-danger fw-bold">${d.waktu_pulang || '-'}</td>
+            <td>${status}</td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+}
+
+// =====================================================================
+// 4. MENGHUBUNGKAN TAB GURU KE FUNGSI ABSENSI BARU
+// =====================================================================
+function bukaHalamanApp(idMenu, judul) {
+    document.getElementById("mobileAppDashboard").style.display = "none";
+    document.getElementById("halamanFiturApp").style.display = "block";
+    document.getElementById("judulHalamanFitur").innerText = judul.toUpperCase();
+    
+    const wadah = document.getElementById("wadahKontenFitur");
+    const gudang = document.getElementById("gudangKonten");
+    while (wadah.firstChild) { gudang.appendChild(wadah.firstChild); }
+    
+    let idTabHtml = "";
+    
+    try {
+        if (idMenu.startsWith('admin_')) {
+            let tabName = idMenu.replace('admin_', '');
+            if(tabName === 'stats') idTabHtml = 'tabStats';
+            else if(tabName === 'verif') idTabHtml = 'tabVerif';
+            else if(tabName === 'lapor') idTabHtml = 'tabLapor';
+            else if(tabName === 'siswa') idTabHtml = 'tabSiswa';
+            else if(tabName === 'guru') idTabHtml = 'tabGuru';
+            else if(tabName === 'kamus') idTabHtml = 'tabKamus';
+            else if(tabName === 'rekap') idTabHtml = 'tabRekap';
+            else if(tabName === 'rekapabsen') idTabHtml = 'tabRekapAbsen';
+            else if(tabName === 'absensi') idTabHtml = 'tabAbsensi';
+            else if(tabName === 'cetakqr') {
+                idTabHtml = 'tabCetakQR';
+                // Ubah Teks Dropdown secara otomatis!
+                let optGuru = document.querySelector('#cetakQrKategori option[value="guru"]');
+                if(optGuru) optGuru.innerText = "Seluruh Guru & Wali Kelas";
+            }
+            if (typeof switchAdminTab === 'function') switchAdminTab(tabName, judul);
+        } 
+        else if (idMenu.startsWith('siswa_')) {
+            let tabName = idMenu.replace('siswa_', '');
+            if(tabName === 'profil') idTabHtml = 'siswaTabProfil';
+            else if(tabName === 'logabsen') idTabHtml = 'siswaTabLogAbsen';
+            else if(tabName === 'pelanggaran') idTabHtml = 'siswaTabPelanggaran';
+            else if(tabName === 'izin') idTabHtml = 'siswaTabIzin';
+            else if(tabName === 'lapor') idTabHtml = 'siswaTabLapor';
+            else if (idMenu === 'siswa_poin') { 
+    idTabHtml = 'siswaTabPoin'; 
+    loadCekPoinSiswa(); // Panggil fungsi penarik poin saat menu diklik!
+}
+            if (typeof switchSiswaTab === 'function') switchSiswaTab(tabName);
+        }
+        else if (idMenu.startsWith('guru_')) {
+            let tabName = idMenu.replace('guru_', '');
+            if(tabName === 'profil') { idTabHtml = 'guruTabProfil'; renderQRGuruMobile(); }
+            else if(tabName === 'logabsen') { 
+                idTabHtml = 'guruTabLogAbsen'; 
+                loadLogAbsenGuruMobile(); // HUBUNGKAN TAB LOG ABSEN GURU KE SINI!
+            }
+            else if(tabName === 'lapor') idTabHtml = 'guruTabLapor';
+            if (typeof switchGuruTab === 'function') switchGuruTab(tabName);
+        }
+        else if (idMenu.startsWith('wali_')) {
+            let tabName = idMenu.replace('wali_', '');
+            if(tabName === 'siswa') idTabHtml = 'waliTabSiswa';
+            else if(tabName === 'absensi') idTabHtml = 'waliTabAbsensi';
+            else if(tabName === 'izin') idTabHtml = 'waliTabIzin';
+            if (typeof switchWaliTab === 'function') switchWaliTab(tabName);
+        }
+    } catch (error) {}
+
+    const elemenTab = document.getElementById(idTabHtml);
+    if (elemenTab) {
+        elemenTab.style.display = "block";
+        wadah.appendChild(elemenTab);
+    }
+}
+
+
+
+// 8. TOMBOL KEMBALI
+function kembaliKeHome() {
+    document.getElementById("halamanFiturApp").style.display = "none";
+    document.getElementById("mobileAppDashboard").style.display = "block";
+    
+    const wadah = document.getElementById("wadahKontenFitur");
+    const gudang = document.getElementById("gudangKonten");
+    while (wadah.firstChild) { gudang.appendChild(wadah.firstChild); }
+}
+
+// 9. JAM REALTIME
+setInterval(() => {
+    const now = new Date();
+    if(document.getElementById('liveJam')) {
+        document.getElementById('liveJam').innerText = now.toLocaleTimeString('id-ID');
+        document.getElementById('liveTanggal').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+}, 1000);
+
+// 10. SMART ALERT
+async function cekSmartAlert(role) {
+    const wadah = document.getElementById("smartAlert");
+    const judul = document.getElementById("alertJudul");
+    const pesan = document.getElementById("alertPesan");
+    const iconBg = wadah.querySelector('.bg-danger') || wadah.querySelector('.bg-success');
+    const icon = wadah.querySelector('.fa-bell');
+    
+    if(window.adminAlertInterval) clearInterval(window.adminAlertInterval);
+
+    try {
+        // ALERT SISWA, GURU & WALI KELAS (STATUS ABSEN)
+        if (role === 'siswa' || role === 'guru' || role === 'walikelas') {
+            let nipId = currentUser.identitas || currentUser.username;
+            let tglHariIni = new Date().toLocaleDateString('en-CA'); 
+            const { data } = await supabaseClient.from('log_absensi').select('id').eq('username', nipId).eq('tanggal', tglHariIni);
+            let statGuruEl = document.getElementById('statusAbsenGuru'); 
+            
+            if (data && data.length > 0) {
+                wadah.className = "alert alert-success shadow rounded-4 border-0 d-flex align-items-center p-3 mb-4 bg-white";
+                iconBg.className = "bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-3";
+                judul.className = "fw-bold mb-0 text-success"; pesan.className = "text-success";
+                judul.innerText = "SUDAH PRESENSI!"; pesan.innerText = "Kehadiran Anda hari ini telah tercatat.";
+                if (statGuruEl) { statGuruEl.className = "alert alert-success py-2 mb-0 fw-bold shadow-sm"; statGuruEl.innerHTML = "<i class='fa-solid fa-check-circle me-1'></i>Sudah Absen Hari Ini"; }
+            } else {
+                judul.innerText = "SEGERA PRESENSI!"; pesan.innerText = "Anda belum tercatat hadir hari ini.";
+                if (statGuruEl) { statGuruEl.className = "alert alert-secondary py-2 mb-0 fw-bold shadow-sm"; statGuruEl.innerHTML = "<i class='fa-solid fa-clock text-muted me-1'></i>Belum Absen Hari Ini"; }
+            }
+        } 
+        // ALERT ADMIN (DATA REAL, BERGETAR & SWIPE ANIMATION)
+        else if (role === 'admin') {
+            wadah.className = "alert alert-danger shadow rounded-4 border-0 d-flex align-items-center p-3 mb-4 bg-white overflow-hidden";
+            iconBg.className = "bg-danger text-white rounded-circle d-flex align-items-center justify-content-center me-3";
+            judul.className = "fw-bold mb-0 text-danger"; pesan.className = "text-secondary";
+
+            try {
+                // 1. Total Siswa Aktif
+                const { count: cSiswa } = await supabaseClient.from('users').select('*', { count: 'exact', head: true }).eq('role', 'siswa');
+                
+                // 2. Laporan Pending
+                const { count: cLapor } = await supabaseClient.from('log_pelanggaran').select('*', { count: 'exact', head: true }).eq('status', 'Pending');
+                
+                // 3. Hitung Siswa Kritis (Ganti angka 100 sesuai batas minimal SP sekolah Anda, misal 50)
+                const { data: dataLog } = await supabaseClient.from('log_pelanggaran').select('nisn, poin').eq('status', 'Disetujui');
+                
+                let poinPerSiswa = {};
+                if (dataLog) {
+                    dataLog.forEach(p => {
+                        if(p.nisn) {
+                            let cleanNisn = String(p.nisn).split('.')[0].trim();
+                            poinPerSiswa[cleanNisn] = (poinPerSiswa[cleanNisn] || 0) + (Number(p.poin) || 0);
+                        }
+                    });
+                }
+                
+                // Ubah angka 100 di bawah ini jika standar kritis sekolah Anda dimulai dari 50 poin
+                let batasKritis = 50; 
+                let cKritis = Object.values(poinPerSiswa).filter(totalPoin => totalPoin >= batasKritis).length;
+
+                let listAlert = [
+                    { j: "TOTAL SISWA AKTIF", p: `${cSiswa || 0} Siswa terdaftar di sistem.` },
+                    { j: "LAPORAN PENDING", p: `Ada ${cLapor || 0} laporan pelanggaran butuh verifikasi!` },
+                    { j: "SISWA KRITIS (SP)", p: `Terdapat ${cKritis} siswa dengan poin kritis (>=${batasKritis}).` }
+                ];
+
+                let idx = 0;
+                const tayangkanAlert = () => {
+                    judul.classList.remove('swipe-animate'); pesan.classList.remove('swipe-animate');
+                    void judul.offsetWidth; 
+                    
+                    judul.innerText = listAlert[idx].j;
+                    pesan.innerText = listAlert[idx].p;
+                    
+                    judul.classList.add('swipe-animate'); pesan.classList.add('swipe-animate');
+                    
+                    icon.classList.add('fa-shake');
+                    setTimeout(() => icon.classList.remove('fa-shake'), 1000);
+                    
+                    idx = (idx + 1) % listAlert.length; 
+                };
+
+                tayangkanAlert();
+                window.adminAlertInterval = setInterval(tayangkanAlert, 4500);
+            } catch(err) {
+                console.error("Gagal memuat alert admin:", err);
+            }
+        }
+    } catch(e) { wadah.style.display = 'none'; }
+}
+
+// =====================================================================
+// LOGIKA UTAMA: TARIK DATA & TAMPILKAN HALAMAN CEK POIN SISWA
+// =====================================================================
+async function loadCekPoinSiswa() {
+    if (!currentUser) return;
+    
+    // Ambil identitas siswa yang sedang login (NISN / Username)
+    let nisnSiswa = String(currentUser.identitas || currentUser.username).replace(/'/g, "").trim();
+    
+    // Set Nama & Kelas di Header
+    document.getElementById('poinNamaSiswa').innerText = currentUser.nama_lengkap || currentUser.nama || "Siswa";
+    document.getElementById('poinNisnKelas').innerText = `NISN: ${nisnSiswa} | Kelas: ${currentUser.kelas || '-'}`;
+    
+    let inisial = (currentUser.nama_lengkap || currentUser.nama || "S").charAt(0).toUpperCase();
+    document.getElementById('poinInisial').innerHTML = `<b class="text-white">${inisial}</b>`;
+    
+    // Reset tampilan awal
+    document.getElementById('angkaTotalPoin').innerText = "0";
+    document.getElementById('progressBarPoin').style.width = "0%";
+    document.getElementById('badgeStatusSp').innerText = "AMAN";
+    document.getElementById('badgeStatusSp').className = "badge bg-white text-success fw-bold px-3 py-1.5 rounded-pill shadow-sm";
+    
+    let wadahRiwayat = document.getElementById('kontenRiwayatPoinSiswa');
+    wadahRiwayat.innerHTML = `
+        <div class="spinner-border text-success mb-2" role="status"></div>
+        <p class="text-muted small m-0">Memuat data poin Anda...</p>
+    `;
+
+    try {
+        // Ambil data log pelanggaran siswa ini yang statusnya 'Disetujui' dari Supabase
+        const { data: listPoin, error } = await supabaseClient
+            .from('log_pelanggaran')
+            .select('*')
+            .eq('status', 'Disetujui');
+            
+        if (error) throw error;
+        
+        // Filter manual berdasarkan NISN yang cocok (untuk mengantisipasi perbedaan format titik/petik)
+        let pelanggaranKu = [];
+        let totalPoinSaya = 0;
+        
+        if (listPoin) {
+            pelanggaranKu = listPoin.filter(p => {
+                let dbNisn = String(p.nisn || '').split('.')[0].trim();
+                return dbNisn === nisnSiswa;
+            });
+            
+            totalPoinSaya = pelanggaranKu.reduce((sum, item) => sum + (Number(item.poin) || 0), 0);
+        }
+        
+        // Render Total Poin & Progress Bar (Maksimal skala 100 untuk persentase bar)
+        document.getElementById('angkaTotalPoin').innerText = totalPoinSaya;
+        let persentase = Math.min((totalPoinSaya / 100) * 100, 100);
+        document.getElementById('progressBarPoin').style.width = persentase + "%";
+        
+        // Tentukan Status SP / Aman
+        let badgeEl = document.getElementById('badgeStatusSp');
+        let cardBg = document.querySelector('.card.bg-success');
+        
+        if (totalPoinSaya >= 100) {
+            badgeEl.innerText = "KRITIS (SP 3)";
+            badgeEl.className = "badge bg-white text-danger fw-bold px-3 py-1.5 rounded-pill shadow-sm";
+            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #dc3545 0%, #ff4d4d 100%)"; // Berubah jadi merah jika kritis
+        } else if (totalPoinSaya >= 75) {
+            badgeEl.innerText = "SP 2";
+            badgeEl.className = "badge bg-white text-warning fw-bold px-3 py-1.5 rounded-pill shadow-sm";
+            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #fd7e14 0%, #ffc107 100%)";
+        } else if (totalPoinSaya >= 50) {
+            badgeEl.innerText = "SP 1";
+            badgeEl.className = "badge bg-white text-warning fw-bold px-3 py-1.5 rounded-pill shadow-sm";
+            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)";
+        } else {
+            badgeEl.innerText = "AMAN";
+            badgeEl.className = "badge bg-white text-success fw-bold px-3 py-1.5 rounded-pill shadow-sm";
+            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #198754 0%, #20c997 100%)";
+        }
+        
+        // Render Tabel / Daftar Riwayat Pelanggaran di sebelah kanan
+        if (pelanggaranKu.length === 0) {
+            wadahRiwayat.innerHTML = `
+                <div class="text-success mb-2" style="font-size: 2.5rem;">
+                    <i class="fa-solid fa-shield-heart"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-1">Berperilaku Sangat Baik!</h5>
+                <p class="text-muted small m-0">TIDAK ADA CATATAN PELANGGARAN TERDETEKSI.</p>
+            `;
+        } else {
+            let htmlList = `<div class="table-responsive w-100" style="max-height: 240px; overflow-y: auto;">
+                <table class="table table-sm table-hover align-middle text-start mb-0" style="font-size: 0.8rem;">
+                    <thead class="table-light">
+                        <tr><th>Tanggal</th><th>Kode</th><th>Poin</th><th>Keterangan</th></tr>
+                    </thead>
+                    <tbody>`;
+            
+            pelanggaranKu.forEach(p => {
+                let tglOnly = (p.tanggal || '').split('T')[0];
+                htmlList += `
+                    <tr>
+                        <td class="fw-bold">${tglOnly}</td>
+                        <td><span class="badge bg-danger">${p.kode_pelanggaran || '-'}</span></td>
+                        <td><span class="fw-bold text-danger">+${p.poin}</span></td>
+                        <td class="text-truncate" style="max-width: 150px;" title="${p.keterangan || ''}">${p.keterangan || '-'}</td>
+                    </tr>`;
+            });
+            
+            htmlList += `</tbody></table></div>`;
+            wadahRiwayat.innerHTML = htmlList;
+        }
+
+    } catch (err) {
+        console.error("Gagal meload poin siswa:", err);
+        wadahRiwayat.innerHTML = `<p class="text-danger small m-0">Gagal memuat riwayat pelanggaran.</p>`;
     }
 }
