@@ -31,17 +31,15 @@ async function tampilkanRekapAbsen() {
     let start = "", end = "", teksJudul = "";
 
     if (tipe === "harian") {
-        start = document.getElementById("inputAbsenHarian").value;
-        end = start;
+        start = document.getElementById("inputAbsenHarian").value; end = start;
         if(!start) return showAlertBS("Perhatian", "Pilih tanggal harian!", "warning");
         teksJudul = `Tanggal: ${new Date(start).toLocaleDateString('id-ID')}`;
     } else if (tipe === "mingguan") {
-        start = document.getElementById("inputAbsenStart").value;
-        end = document.getElementById("inputAbsenEnd").value;
+        start = document.getElementById("inputAbsenStart").value; end = document.getElementById("inputAbsenEnd").value;
         if(!start || !end) return showAlertBS("Perhatian", "Pilih rentang tanggal mulai dan akhir!", "warning");
         teksJudul = `Periode: ${start} s/d ${end}`;
     } else if (tipe === "bulanan") {
-        let bln = document.getElementById("inputAbsenBulan").value; // Format: YYYY-MM
+        let bln = document.getElementById("inputAbsenBulan").value; 
         if(!bln) return showAlertBS("Perhatian", "Pilih bulan!", "warning");
         let thn = bln.split("-")[0]; let bl = bln.split("-")[1];
         start = `${thn}-${bl}-01`;
@@ -51,26 +49,44 @@ async function tampilkanRekapAbsen() {
     }
 
     const tb = document.getElementById("tbRekapAbsenAdmin");
-    tb.innerHTML = '<tr><td colspan="7"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data...</td></tr>';
+    
+    // --- MODIFIKASI HEADER TABEL SECARA OTOMATIS ---
+    // Pastikan kolom "Status" muncul di ujung tabel HTML Anda
+    const thead = document.querySelector("#tabelRekapAbsenSistem thead tr");
+    if (thead && thead.innerText.indexOf("Status") === -1) {
+        let thBaru = document.createElement("th");
+        thBaru.innerText = "Status";
+        thead.appendChild(thBaru);
+    }
+
+    tb.innerHTML = '<tr><td colspan="8" class="py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i> Memuat data...</td></tr>';
 
     const res = await panggilAPI({ aksi: "get_rekap_absensi", startDate: start, endDate: end, kelas: kls, roleTujuan: kat });
 
     if (res.status === "sukses" && res.data.length > 0) {
         document.getElementById("subjudulLaporanAbsen").innerHTML = `${teksJudul}<br>Kategori: ${kat.toUpperCase()} ${kls ? ' | KELAS: ' + kls : ''}`;
         
-        tb.innerHTML = res.data.map((d, i) => `
+        tb.innerHTML = res.data.map((d, i) => {
+            // --- LOGIKA BADGE STATUS ---
+            let statusBadge = '<span class="badge bg-danger">Alpa</span>';
+            if (d.status_hadir === 'S' || d.status_hadir === 'SAKIT') statusBadge = '<span class="badge bg-info text-white">Sakit</span>';
+            else if (d.status_hadir === 'I' || d.status_hadir === 'IZIN') statusBadge = '<span class="badge bg-warning text-dark">Izin</span>';
+            else if (d.status_hadir === 'H' || d.waktu_masuk) statusBadge = '<span class="badge bg-success">Hadir</span>';
+
+            return `
             <tr>
                 <td>${i+1}</td>
                 <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
                 <td>${d.username}</td>
                 <td class="text-start fw-bold">${d.nama}</td>
                 <td>${d.kelas || '-'}</td>
-                <td class="text-success">${d.waktu_masuk || '-'}</td>
-                <td class="text-danger">${d.waktu_pulang || '-'}</td>
-            </tr>
-        `).join("");
+                <td class="text-success fw-bold">${d.waktu_masuk || '-'}</td>
+                <td class="text-danger fw-bold">${d.waktu_pulang || '-'}</td>
+                <td>${statusBadge}</td>
+            </tr>`;
+        }).join("");
     } else {
-        tb.innerHTML = '<tr><td colspan="7" class="text-danger fw-bold py-3">Tidak ada data kehadiran pada filter yang dipilih.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="8" class="text-danger fw-bold py-4">Tidak ada data kehadiran pada filter yang dipilih.</td></tr>';
     }
 }
 

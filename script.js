@@ -270,8 +270,6 @@ async function handleLogin(event) {
     }
 
     try {
-        // Query ke tabel Supabase 'users'
-        // Kita cari berdasarkan username/identitas dan role-nya
         let { data, error } = await supabaseClient
             .from('users')
             .select('*')
@@ -283,52 +281,40 @@ async function handleLogin(event) {
             throw new Error("Akun tidak ditemukan atau role/ID salah!");
         }
 
-        // Cek password (mendukung tipe data string maupun angka)
         if (String(data.password) !== String(passInput)) {
             throw new Error("Kata sandi salah! Silakan coba lagi.");
         }
 
-        // --- LOGIN BERHASIL ---
-        currentUser = data; // Set variabel global user yang aktif
+        // --- PERBAIKAN 1: Bentuk ulang format data agar bisa dibaca fungsi utama ---
+        let payloadRes = {
+            status: "sukses",
+            role: data.role,
+            identitas: data.username,
+            nama: data.nama_lengkap || data.username,
+            kelas: data.kelas,
+            foto_profil: data.foto_profil,
+            rawData: data
+        };
 
-        // Ambil data sesi ringkas untuk disimpan ke localStorage (Mencegah QuotaExceededError)
+        // Simpan sesi ke localStorage
         let sesiData = {
             username: data.username,
             nama_lengkap: data.nama_lengkap || data.nama,
             role: data.role,
             kelas: data.kelas,
-            identitas: data.username
+            identitas: data.username,
+            pin_bawah: data.pin_bawah // Bawa data pin agar aman
         };
+        localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
 
-        try {
-            localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
-        } catch (storageErr) {
-            localStorage.clear();
-            localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
-        }
-
-        // Sembunyikan form login, tampilkan dashboard mobile
-        document.getElementById('loginSection').style.display = 'none';
-        
-        // Panggil render menu utama sesuai role
-        if (typeof renderGridMenuApp === 'function') {
-            renderGridMenuApp(data.role, data.username, data.pin_bawah);
-        } else {
-            location.reload(); // Fallback jika fungsi render belum siap
-        }
+        // --- PERBAIKAN 2: Jalankan proses secara terpusat (Sembunyikan login & render UI) ---
+        aktifkanTampilanUser(payloadRes);
 
     } catch (err) {
         console.error("ERROR LOGIN DETECTED:", err.message);
-        
-        // Tampilkan pesan error menggunakan Modal Bootstrap yang sudah ada
-        if (typeof showAlertBS === 'function') {
-            showAlertBS("Gagal Masuk", err.message, "danger");
-        } else {
-            alert(err.message);
-        }
-        
+        if (typeof showAlertBS === 'function') showAlertBS("Gagal Masuk", err.message, "danger");
+        else alert(err.message);
     } finally {
-        // PENTING: Kembalikan tombol login ke kondisi normal (bisa diklik lagi meskipun salah password)
         if (btnLogin) {
             btnLogin.disabled = false;
             btnLogin.innerHTML = '<i class="fa-solid fa-right-to-bracket me-2"></i>Masuk ke Sistem';
@@ -339,15 +325,28 @@ async function handleLogin(event) {
 function aktifkanTampilanUser(res) {
     currentUser = res;
 
+    // --- PERBAIKAN 3: Ambil nama dengan tepat agar tulisan "Selamat Datang" terisi ---
+    let namaTampil = res.nama || res.nama_lengkap || res.username || "User";
+    
     // Set nama user di header app
-if(document.getElementById('txtAppNamaUser')) document.getElementById('txtAppNamaUser').innerText = res.nama;
+    if(document.getElementById('txtAppNamaUser')) {
+        document.getElementById('txtAppNamaUser').innerText = namaTampil;
+    }
 
-// Render tampilan utama Mobile App
-renderGridMenuApp(res.role, res.identitas, res.rawData.pin_bawah);
+    // --- PERBAIKAN 4: Cegah CRASH saat memuat pin_bawah dari LocalStorage ---
+    let pinBawahData = '["home"]';
+    if (res.rawData && res.rawData.pin_bawah) {
+        pinBawahData = res.rawData.pin_bawah;
+    } else if (res.pin_bawah) {
+        pinBawahData = res.pin_bawah;
+    }
+
+    // Render tampilan utama Mobile App dengan data aman
+    renderGridMenuApp(res.role, res.identitas, pinBawahData);
     
     if(document.getElementById("loginSection")) document.getElementById("loginSection").style.display = "none";
     if(document.getElementById("userBadge")) document.getElementById("userBadge").style.setProperty("display", "flex", "important");
-    if(document.getElementById("txtNamaUser")) document.getElementById("txtNamaUser").innerText = `${res.nama} (${res.role.toUpperCase()})`;
+    if(document.getElementById("txtNamaUser")) document.getElementById("txtNamaUser").innerText = `${namaTampil} (${res.role.toUpperCase()})`;
     
     if (res.role === "siswa") {
         if(document.getElementById("siswaSection")) document.getElementById("siswaSection").style.display = "block";
@@ -364,65 +363,54 @@ renderGridMenuApp(res.role, res.identitas, res.rawData.pin_bawah);
         // --- MENGISI DATA KE TAMPILAN SHOW & TAMPILAN EDIT PROFIL ---
         if (res.rawData) {
            const d = res.rawData;
-        
-        // Konversi tanggal lahir agar aman dari angka serial Excel
-        let tanggalMatang = konversiTanggalExcel(d.tanggal_lahir);
-        let tanggalTampil = formatTampilTanggal(d.tanggal_lahir);
-       
+           let tanggalMatang = konversiTanggalExcel(d.tanggal_lahir);
+           let tanggalTampil = formatTampilTanggal(d.tanggal_lahir);
+           
+           if(document.getElementById("viewNisn")) document.getElementById("viewNisn").innerText = d.username || "-";
+           if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = d.nama_lengkap || "-";
+           if(document.getElementById("viewKelas")) document.getElementById("viewKelas").innerText = d.kelas || "-";
+           if(document.getElementById("viewJk")) document.getElementById("viewJk").innerText = d.jenis_kelamin === 'L' ? 'Laki-Laki' : (d.jenis_kelamin === 'P' ? 'Perempuan' : '-');
+           if(document.getElementById("viewTempatLahir")) document.getElementById("viewTempatLahir").innerText = d.tempat_lahir || "-";
+           if(document.getElementById("viewTglLahir")) document.getElementById("viewTglLahir").innerText = tanggalTampil;
+           if(document.getElementById("viewAgama")) document.getElementById("viewAgama").innerText = d.agama || "-";
+           if(document.getElementById("viewNoHp")) document.getElementById("viewNoHp").innerText = d.no_hp || "-";
+           if(document.getElementById("viewEmail")) document.getElementById("viewEmail").innerText = d.email || "-";
+           if(document.getElementById("viewAlamat")) document.getElementById("viewAlamat").innerText = d.alamat || "-";
+           if(document.getElementById("viewNamaAyah")) document.getElementById("viewNamaAyah").innerText = d.nama_ayah || "-";
+           if(document.getElementById("viewHpAyah")) document.getElementById("viewHpAyah").innerText = d.no_hp_ayah || "-";
+           if(document.getElementById("viewNamaIbu")) document.getElementById("viewNamaIbu").innerText = d.nama_ibu || "-";
+           if(document.getElementById("viewHpIbu")) document.getElementById("viewHpIbu").innerText = d.no_hp_ibu || "-";
 
-        // 2. Tampilan EDIT (Form) - Menggunakan format YYYY-MM-DD agar pas di input type="date"
-       
-
-            // 1. Tampilan BACA (Show)
-            
-            if(document.getElementById("viewNisn")) document.getElementById("viewNisn").innerText = d.username || "-";
-            if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = d.nama_lengkap || "-";
-            if(document.getElementById("viewKelas")) document.getElementById("viewKelas").innerText = d.kelas || "-";
-            if(document.getElementById("viewJk")) document.getElementById("viewJk").innerText = d.jenis_kelamin === 'L' ? 'Laki-Laki' : (d.jenis_kelamin === 'P' ? 'Perempuan' : '-');
-            if(document.getElementById("viewTempatLahir")) document.getElementById("viewTempatLahir").innerText = d.tempat_lahir || "-";
-            if(document.getElementById("viewTglLahir")) document.getElementById("viewTglLahir").innerText = tanggalTampil;
-            if(document.getElementById("viewAgama")) document.getElementById("viewAgama").innerText = d.agama || "-";
-            if(document.getElementById("viewNoHp")) document.getElementById("viewNoHp").innerText = d.no_hp || "-";
-            if(document.getElementById("viewEmail")) document.getElementById("viewEmail").innerText = d.email || "-";
-            if(document.getElementById("viewAlamat")) document.getElementById("viewAlamat").innerText = d.alamat || "-";
-            if(document.getElementById("viewNamaAyah")) document.getElementById("viewNamaAyah").innerText = d.nama_ayah || "-";
-            if(document.getElementById("viewHpAyah")) document.getElementById("viewHpAyah").innerText = d.no_hp_ayah || "-";
-            if(document.getElementById("viewNamaIbu")) document.getElementById("viewNamaIbu").innerText = d.nama_ibu || "-";
-            if(document.getElementById("viewHpIbu")) document.getElementById("viewHpIbu").innerText = d.no_hp_ibu || "-";
-
-            // 2. Tampilan EDIT (Form)
-            if(document.getElementById("profNisn")) document.getElementById("profNisn").value = d.username || "";
-            if(document.getElementById("profNama")) document.getElementById("profNama").value = d.nama_lengkap || "";
-            if(document.getElementById("profKelas")) document.getElementById("profKelas").value = d.kelas || "";
-            if(document.getElementById("profJk")) document.getElementById("profJk").value = d.jenis_kelamin || "";
-            if(document.getElementById("profTempatLahir")) document.getElementById("profTempatLahir").value = d.tempat_lahir || "";
-             if(document.getElementById("profTglLahir")) document.getElementById("profTglLahir").value = tanggalMatang;
-            if(document.getElementById("profAgama")) document.getElementById("profAgama").value = d.agama || "";
-            if(document.getElementById("profNoHp")) document.getElementById("profNoHp").value = d.no_hp || "";
-            if(document.getElementById("profEmail")) document.getElementById("profEmail").value = d.email || "";
-            if(document.getElementById("profAlamat")) document.getElementById("profAlamat").value = d.alamat || "";
-            if(document.getElementById("profNamaAyah")) document.getElementById("profNamaAyah").value = d.nama_ayah || "";
-            if(document.getElementById("profHpAyah")) document.getElementById("profHpAyah").value = d.no_hp_ayah || "";
-            if(document.getElementById("profNamaIbu")) document.getElementById("profNamaIbu").value = d.nama_ibu || "";
-            if(document.getElementById("profHpIbu")) document.getElementById("profHpIbu").value = d.no_hp_ibu || "";
+           if(document.getElementById("profNisn")) document.getElementById("profNisn").value = d.username || "";
+           if(document.getElementById("profNama")) document.getElementById("profNama").value = d.nama_lengkap || "";
+           if(document.getElementById("profKelas")) document.getElementById("profKelas").value = d.kelas || "";
+           if(document.getElementById("profJk")) document.getElementById("profJk").value = d.jenis_kelamin || "";
+           if(document.getElementById("profTempatLahir")) document.getElementById("profTempatLahir").value = d.tempat_lahir || "";
+           if(document.getElementById("profTglLahir")) document.getElementById("profTglLahir").value = tanggalMatang;
+           if(document.getElementById("profAgama")) document.getElementById("profAgama").value = d.agama || "";
+           if(document.getElementById("profNoHp")) document.getElementById("profNoHp").value = d.no_hp || "";
+           if(document.getElementById("profEmail")) document.getElementById("profEmail").value = d.email || "";
+           if(document.getElementById("profAlamat")) document.getElementById("profAlamat").value = d.alamat || "";
+           if(document.getElementById("profNamaAyah")) document.getElementById("profNamaAyah").value = d.nama_ayah || "";
+           if(document.getElementById("profHpAyah")) document.getElementById("profHpAyah").value = d.no_hp_ayah || "";
+           if(document.getElementById("profNamaIbu")) document.getElementById("profNamaIbu").value = d.nama_ibu || "";
+           if(document.getElementById("profHpIbu")) document.getElementById("profHpIbu").value = d.no_hp_ibu || "";
         }
 
         // Tampilkan Nama, NISN & Foto Profil
-        if(document.getElementById("txtNamaProfilSiswa")) document.getElementById("txtNamaProfilSiswa").innerText = res.nama;
+        if(document.getElementById("txtNamaProfilSiswa")) document.getElementById("txtNamaProfilSiswa").innerText = namaTampil;
         if(document.getElementById("txtNisnProfilSiswa")) document.getElementById("txtNisnProfilSiswa").innerText = res.identitas;
         if(document.getElementById("txtKelasProfilSiswa")) document.getElementById("txtKelasProfilSiswa").innerText = res.kelas || "-";
         
         const imgEl = document.getElementById("imgProfilSiswa");
         if (imgEl) {
-            imgEl.src = res.foto_profil ? res.foto_profil : `https://ui-avatars.com/api/?name=${res.nama.replace(/\s/g, '+')}&background=198754&color=fff&size=200`;
+            imgEl.src = res.foto_profil ? res.foto_profil : `https://ui-avatars.com/api/?name=${namaTampil.replace(/\s/g, '+')}&background=198754&color=fff&size=200`;
         }
 
-        // --- PEMANGGILAN FUNGSI DASBOR SISWA YANG BERSIH & TIDAK DUPLIKAT ---
         if(typeof loadRiwayatSiswa === 'function') loadRiwayatSiswa(res.identitas);
         if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
         if(typeof loadRiwayatIzinSiswa === 'function') loadRiwayatIzinSiswa(res.identitas);
         if(typeof isiDropdownLaporSiswa === 'function') isiDropdownLaporSiswa();
-        
         if(typeof switchSiswaTab === 'function') switchSiswaTab('profil');
         
     } else if (res.role === "guru") {
@@ -433,11 +421,17 @@ renderGridMenuApp(res.role, res.identitas, res.rawData.pin_bawah);
         
     } else if (res.role === "admin") {
         if(document.getElementById("adminSection")) document.getElementById("adminSection").style.display = "block";
+        
+        // --- PERBAIKAN 5: Pastikan fungsi penarik data kelas dipanggil saat Admin Login ---
         if(typeof loadFormDataMaster === 'function') loadFormDataMaster();
         if(typeof loadStats === 'function') loadStats();
         
     } else if (res.role === "walikelas") {
         if(document.getElementById("walikelasSection")) document.getElementById("walikelasSection").style.display = "block";
+        
+        // --- PERBAIKAN: Wajib panggil ini agar Dropdown Kelas & Data Form terisi ---
+        if(typeof loadFormDataMaster === 'function') loadFormDataMaster();
+        if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
         if(typeof initWaliKelas === 'function') initWaliKelas(res.kelas); 
     }
 }
@@ -3136,20 +3130,35 @@ async function eksekusiPinMenu(idMenu) {
     let isPinned = userPinBawah.includes(idMenu);
     
     if(isPinned) {
-        userPinBawah = userPinBawah.filter(id => id !== idMenu);
+        userPinBawah = userPinBawah.filter(id => id !== idMenu); // Hapus jika sudah ada
     } else {
         if(userPinBawah.length >= 5) {
-            alert("Maksimal hanya 5 menu di Bar Bawah agar tidak sesak.");
+            if(typeof showAlertBS === 'function') showAlertBS("Penuh", "Maksimal hanya 5 menu di Bar Bawah agar tidak sesak.", "warning");
+            else alert("Maksimal hanya 5 menu di Bar Bawah.");
             return;
         }
-        userPinBawah.push(idMenu);
+        userPinBawah.push(idMenu); // Tambah jika belum ada
     }
     
+    // Perbarui UI Navigasi Bawah
     renderBottomNavBar();
     
     let nisn = currentUser.identitas || currentUser.username;
     if (nisn) {
+        // 1. Simpan ke database Supabase
         await supabaseClient.from('users').update({ pin_bawah: JSON.stringify(userPinBawah) }).eq('username', nisn);
+        
+        // 2. PERBAIKAN: Simpan juga ke LocalStorage agar saat refresh tidak hilang!
+        let sesiTersimpan = localStorage.getItem('sesi_addawah');
+        if (sesiTersimpan) {
+            let sesiData = JSON.parse(sesiTersimpan);
+            sesiData.pin_bawah = JSON.stringify(userPinBawah); // Simpan format string
+            localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
+        }
+        
+        // 3. Sinkronkan dengan data user yang sedang berjalan
+        if (currentUser.rawData) currentUser.rawData.pin_bawah = JSON.stringify(userPinBawah);
+        currentUser.pin_bawah = JSON.stringify(userPinBawah);
     }
 }
 
