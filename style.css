@@ -61,3 +61,97 @@ body {
     border-style: dashed !important;
     border-width: 2px !important;
 }
+
+/* ========================================================== */
+/* PENGATURAN MODE GELAP ELEGANT (GLASSMORPHISM & SOFT)       */
+/* ========================================================== */
+body.dark-mode {
+    --bg-body: #07090e;       /* Hitam kebiruan yang sangat dalam & lembut */
+    --bg-card: rgba(22, 30, 49, 0.75); /* Semi-transparan untuk efek kaca */
+    --text-main: #e2e8f0;     /* Putih soft / keperakan (tidak silau) */
+    --text-muted: #94a3b8;    /* Abu-abu lembut */
+    --border-color: rgba(255, 255, 255, 0.08); /* Garis tepi sangat tipis */
+    --table-head: #1e293b;
+    --input-bg: rgba(17, 24, 39, 0.8);
+    --input-text: #ffffff;
+}
+
+/* Terapkan warna dasar body */
+body.dark-mode {
+    background-color: var(--bg-body) !important;
+    color: var(--text-main) !important;
+}
+
+/* Header Aplikasi (Gradasi lembut senada) */
+body.dark-mode .app-header {
+    background: linear-gradient(135deg, #131c31 0%, #07090e 100%) !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Efek Transparansi Elegan (Glassmorphism) pada Card & Modal */
+body.dark-mode .card,
+body.dark-mode .modal-content,
+body.dark-mode #bottomNavBar,
+body.dark-mode .bg-white { /* Ini mengunci agar elemen yang tadinya bg-white ikut transparan */
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-color) !important;
+    backdrop-filter: blur(12px); /* Efek kaca buram */
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Penyesuaian khusus untuk Smart Alert agar teks dan ikonnya kontras tapi lembut */
+body.dark-mode #smartAlert {
+    background-color: rgba(22, 30, 49, 0.85) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important; /* Sentuhan garis merah tipis elegan */
+}
+
+body.dark-mode #smartAlert h6 {
+    color: #f87171 !important; /* Warna merah soft */
+}
+
+body.dark-mode #smartAlert small {
+    color: var(--text-muted) !important;
+}
+
+/* Warna Teks Judul */
+body.dark-mode h1, body.dark-mode h2, body.dark-mode h3, 
+body.dark-mode h4, body.dark-mode h5, body.dark-mode h6,
+body.dark-mode .text-dark {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Tabel dan Form Input */
+body.dark-mode .table {
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+}
+
+body.dark-mode .table-light,
+body.dark-mode thead.table-light th {
+    background-color: rgba(30, 41, 59, 0.9) !important;
+    color: #ffffff !important;
+    border-color: var(--border-color) !important;
+}
+
+body.dark-mode .form-control, 
+body.dark-mode .form-select {
+    background-color: var(--input-bg) !important;
+    color: var(--input-text) !important;
+    border-color: var(--border-color) !important;
+}
+
+body.dark-mode .form-control::placeholder {
+    color: #64748b !important;
+}
+
+body.dark-mode .bg-light {
+    background-color: rgba(30, 41, 59, 0.6) !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+}

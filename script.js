@@ -3611,3 +3611,35 @@ async function loadCekPoinSiswa() {
         wadahRiwayat.innerHTML = `<p class="text-danger small m-0">Gagal memuat riwayat pelanggaran.</p>`;
     }
 }
+
+// =====================================================================
+// FITUR MODE GELAP (DARK MODE) OTOMATIS & TOGGLE
+// =====================================================================
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('theme_addawah', isDark ? 'dark' : 'light');
+    updateIconDarkMode(isDark);
+}
+
+function updateIconDarkMode(isDark) {
+    const icon = document.getElementById('iconDarkMode');
+    if (icon) {
+        if (isDark) {
+            icon.className = "fa-solid fa-sun text-warning"; // Berubah jadi ikon matahari
+        } else {
+            icon.className = "fa-solid fa-moon text-dark";   // Berubah jadi ikon bulan
+        }
+    }
+}
+
+// Jalankan otomatis saat halaman dimuat (Mengecek memori pilihan user sebelumnya)
+document.addEventListener("DOMContentLoaded", () => {
+    const savedTheme = localStorage.getItem('theme_addawah');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+        updateIconDarkMode(true);
+    } else {
+        updateIconDarkMode(false);
+    }
+});
