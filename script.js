@@ -3004,6 +3004,7 @@ const daftarMenuApp = {
     'admin_rekapabsen': { judul: 'Rekap Absen', icon: 'fa-calendar-days', color: 'bg-info text-white' },
     'admin_absensi': { judul: 'Sistem QR', icon: 'fa-qrcode', color: 'bg-primary' },
     'admin_cetakqr': { judul: 'Cetak QR', icon: 'fa-print', color: 'bg-dark' },
+    'admin_eraport': { judul: 'Set E-Raport', icon: 'fa-cogs', color: 'bg-danger' },
 
     // --- MENU SISWA ---
     'siswa_profil': { judul: 'Profil', icon: 'fa-user-astronaut', color: 'bg-primary' },
@@ -3017,19 +3018,21 @@ const daftarMenuApp = {
     'guru_profil': { judul: 'Profil & QR', icon: 'fa-qrcode', color: 'bg-primary' },
     'guru_logabsen': { judul: 'Log Absen', icon: 'fa-calendar-check', color: 'bg-success' },
     'guru_lapor': { judul: 'Form Lapor', icon: 'fa-pen-to-square', color: 'bg-danger' },
+    'guru_eraport': { judul: 'E-Raport', icon: 'fa-book-open', color: 'bg-primary' },
 
     // --- MENU WALI KELAS ---
     'wali_siswa': { judul: 'Data Kelas', icon: 'fa-users', color: 'bg-primary' },
     'wali_absensi': { judul: 'Absen Kelas', icon: 'fa-calendar-days', color: 'bg-info text-white' },
-    'wali_izin': { judul: 'Antrean Izin', icon: 'fa-list-check', color: 'bg-warning text-dark' }
+    'wali_izin': { judul: 'Antrean Izin', icon: 'fa-list-check', color: 'bg-warning text-dark' },
+    'wali_eraport': { judul: 'Cetak Rapor', icon: 'fa-print', color: 'bg-success' },
 };
 
 // 2. PEMBAGIAN HAK AKSES MENU SESUAI ROLE
 const menuPerRole = {
-    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr'],
+    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport'],
     'siswa': ['siswa_profil', 'siswa_logabsen', 'siswa_pelanggaran', 'siswa_izin', 'siswa_lapor', 'siswa_poin'],
-    'guru': ['guru_profil', 'guru_logabsen', 'guru_lapor'],
-    'walikelas': ['wali_siswa', 'wali_absensi', 'wali_izin']
+    'guru': ['guru_profil', 'guru_logabsen', 'guru_lapor', 'guru_eraport'],
+    'walikelas': ['wali_siswa', 'wali_absensi', 'wali_izin', 'wali_eraport']
 };
 
 let userPinBawah = ['home']; 
@@ -3047,10 +3050,10 @@ function renderGridMenuApp(role, usernameDb, pinDatabaseText) {
     let htmlMenu = '';
     
     // PENGGABUNGAN MENU (WALI KELAS DAPAT FITUR GURU)
-    let menuUserIni = menuPerRole[role] || [];
+   let menuUserIni = menuPerRole[role] || [];
     if (role === 'walikelas') {
-        // Jika Wali Kelas, gabungkan array menu Guru dan Wali Kelas!
-        menuUserIni = [...menuPerRole['guru'], ...menuPerRole['walikelas']];
+        // PERBAIKAN: Gunakan Set untuk otomatis membuang duplikat!
+        menuUserIni = [...new Set([...menuPerRole['guru'], ...menuPerRole['walikelas']])];
     }
     
     menuUserIni.forEach(idMenu => {
@@ -3345,6 +3348,11 @@ function bukaHalamanApp(idMenu, judul) {
                 let optGuru = document.querySelector('#cetakQrKategori option[value="guru"]');
                 if(optGuru) optGuru.innerText = "Seluruh Guru & Wali Kelas";
             }
+
+            else if(tabName === 'eraport') {
+                idTabHtml = 'tabAdminEraport';
+                if(typeof loadPengaturanEraport === 'function') loadPengaturanEraport();
+            }
             if (typeof switchAdminTab === 'function') switchAdminTab(tabName, judul);
         } 
         else if (idMenu.startsWith('siswa_')) {
@@ -3368,6 +3376,10 @@ function bukaHalamanApp(idMenu, judul) {
                 loadLogAbsenGuruMobile(); // HUBUNGKAN TAB LOG ABSEN GURU KE SINI!
             }
             else if(tabName === 'lapor') idTabHtml = 'guruTabLapor';
+            else if(tabName === 'eraport') { 
+                idTabHtml = 'guruTabEraport'; 
+                if(typeof loadMapelGuru === 'function') loadMapelGuru(); 
+            }
             if (typeof switchGuruTab === 'function') switchGuruTab(tabName);
         }
         else if (idMenu.startsWith('wali_')) {
@@ -3375,6 +3387,10 @@ function bukaHalamanApp(idMenu, judul) {
             if(tabName === 'siswa') idTabHtml = 'waliTabSiswa';
             else if(tabName === 'absensi') idTabHtml = 'waliTabAbsensi';
             else if(tabName === 'izin') idTabHtml = 'waliTabIzin';
+            else if(tabName === 'eraport') { 
+                idTabHtml = 'waliTabEraport'; 
+                if(typeof loadSiswaUntukRaport === 'function') loadSiswaUntukRaport(); 
+            }
             if (typeof switchWaliTab === 'function') switchWaliTab(tabName);
         }
     } catch (error) {}
@@ -3643,3 +3659,1106 @@ document.addEventListener("DOMContentLoaded", () => {
         updateIconDarkMode(false);
     }
 });
+
+// =====================================================================
+// [MODUL E-RAPORT] SISI ADMIN: PENGATURAN TAHUN & KOMPONEN
+// =====================================================================
+
+let modalTahunInstance, modalKomponenInstance;
+
+function loadPengaturanEraport() {
+    loadTahunAjaran();
+    loadKomponenNilai();
+    initDropdownKelasKelompok();
+}
+
+// ---------------- 1. TAHUN AJARAN ----------------
+
+async function loadTahunAjaran() {
+    const tb = document.getElementById("tbTahunAjaran");
+    tb.innerHTML = '<tr><td colspan="5"><i class="fa-solid fa-spinner fa-spin"></i> Memuat...</td></tr>';
+    
+    // Query langsung ke Supabase
+    const { data, error } = await supabaseClient.from('tahun_ajaran').select('*').order('tahun', { ascending: false });
+    
+    if (error) {
+        tb.innerHTML = `<tr><td colspan="5" class="text-danger">Error: ${error.message}</td></tr>`;
+        return;
+    }
+    
+    if (data && data.length > 0) {
+        tb.innerHTML = data.map(d => {
+            let badgeAktif = d.status_aktif ? `<span class="badge bg-success"><i class="fa-solid fa-check-circle me-1"></i>Aktif</span>` : `<button class="btn btn-sm btn-outline-success" onclick="setAktifTahun('${d.id}')">Jadikan Aktif</button>`;
+            
+            let btnLock = d.is_locked 
+                ? `<button class="btn btn-sm btn-danger fw-bold" onclick="toggleLockTahun('${d.id}', false)"><i class="fa-solid fa-lock me-1"></i>Terkunci</button>` 
+                : `<button class="btn btn-sm btn-outline-primary fw-bold" onclick="toggleLockTahun('${d.id}', true)"><i class="fa-solid fa-lock-open me-1"></i>Terbuka</button>`;
+            
+            return `<tr>
+                <td class="fw-bold">${d.tahun}</td>
+                <td>${d.semester}</td>
+                <td>${badgeAktif}</td>
+                <td>${btnLock}</td>
+                <td><button class="btn btn-sm btn-outline-danger" onclick="hapusTahunAjaran('${d.id}')"><i class="fa-solid fa-trash"></i></button></td>
+            </tr>`;
+        }).join("");
+    } else {
+        tb.innerHTML = '<tr><td colspan="5" class="text-muted py-3">Belum ada data Tahun Ajaran.</td></tr>';
+    }
+}
+
+function bukaModalTahunAjaran() {
+    document.getElementById("formTahunNama").value = "";
+    if(!modalTahunInstance) modalTahunInstance = new bootstrap.Modal(document.getElementById('modalTahunAjaran'));
+    modalTahunInstance.show();
+}
+
+async function simpanTahunAjaran() {
+    const id = document.getElementById("formTahunId").value;
+    const tahun = document.getElementById("formTahunNama").value.trim();
+    const semester = document.getElementById("formTahunSemester").value;
+    const tgl = document.getElementById("formTahunTanggal").value;
+    const kepsek = document.getElementById("formTahunKepsek").value.trim();
+    const nipKepsek = document.getElementById("formTahunNipKepsek").value.trim();
+    
+    if (!tahun || !tgl || !kepsek) return showAlertBS("Perhatian", "Data Tahun, Tanggal, dan Kepsek wajib diisi!", "warning");
+    
+    let payload = { tahun: tahun, semester: semester, tanggal_rapor: tgl, nama_kepsek: kepsek, nip_kepsek: nipKepsek };
+    let errorResult = null;
+
+    if (id) {
+        const { error } = await supabaseClient.from('tahun_ajaran').update(payload).eq('id', id);
+        errorResult = error;
+    } else {
+        const { error } = await supabaseClient.from('tahun_ajaran').insert([payload]);
+        errorResult = error;
+    }
+    
+    if (errorResult) showAlertBS("Gagal", errorResult.message, "error");
+    else {
+        modalTahunInstance.hide();
+        showAlertBS("Berhasil", "Pengaturan Tahun Ajaran tersimpan.", "success");
+        loadTahunAjaran();
+    }
+}
+
+async function setAktifTahun(id) {
+    showConfirmBS("Jadikan tahun ajaran ini sebagai semester Aktif? (Tahun yang lain akan dinonaktifkan)", async () => {
+        // Matikan semua dulu
+        await supabaseClient.from('tahun_ajaran').update({ status_aktif: false }).neq('id', id);
+        // Aktifkan yang dipilih
+        const { error } = await supabaseClient.from('tahun_ajaran').update({ status_aktif: true }).eq('id', id);
+        
+        if (error) showAlertBS("Gagal", error.message, "error");
+        else { showAlertBS("Berhasil", "Tahun Ajaran Aktif telah diubah.", "success"); loadTahunAjaran(); }
+    });
+}
+
+async function toggleLockTahun(id, toLock) {
+    let pesan = toLock 
+        ? "KUNCI SEMESTER INI? Guru tidak akan bisa menambah/mengubah nilai lagi." 
+        : "BUKA KUNCI SEMESTER? Guru dapat kembali mengedit nilai.";
+        
+    showConfirmBS(pesan, async () => {
+        const { error } = await supabaseClient.from('tahun_ajaran').update({ is_locked: toLock }).eq('id', id);
+        if (error) showAlertBS("Gagal", error.message, "error");
+        else loadTahunAjaran();
+    });
+}
+
+async function hapusTahunAjaran(id) {
+    showConfirmBS("Yakin ingin menghapus Tahun Ajaran ini? Data yang terhubung mungkin akan bermasalah jika sudah ada nilai.", async () => {
+        const { error } = await supabaseClient.from('tahun_ajaran').delete().eq('id', id);
+        if (error) showAlertBS("Gagal", error.message, "error");
+        else loadTahunAjaran();
+    });
+}
+
+// ---------------- 2. KOMPONEN NILAI ----------------
+
+async function loadKomponenNilai() {
+    const tb = document.getElementById("tbKomponenNilai");
+    const tf = document.getElementById("tfKomponenNilai");
+    
+    tb.innerHTML = '<tr><td colspan="3"><i class="fa-solid fa-spinner fa-spin"></i> Memuat...</td></tr>';
+    
+    const { data, error } = await supabaseClient.from('komponen_nilai').select('*').order('nama_komponen', { ascending: true });
+    
+    if (error) { tb.innerHTML = `<tr><td colspan="3" class="text-danger">Error: ${error.message}</td></tr>`; return; }
+    
+    if (data && data.length > 0) {
+        let totalBobot = 0;
+        tb.innerHTML = data.map(d => {
+            totalBobot += parseInt(d.bobot_persen || 0);
+            return `<tr>
+                <td class="fw-bold text-start ps-4">${d.nama_komponen}</td>
+                <td class="text-danger fw-bold fs-6">${d.bobot_persen} %</td>
+                <td><button class="btn btn-sm btn-outline-danger" onclick="hapusKomponen('${d.id}')"><i class="fa-solid fa-trash"></i></button></td>
+            </tr>`;
+        }).join("");
+        
+        let warnaTotal = totalBobot === 100 ? 'text-success' : 'text-danger';
+        tf.innerHTML = `<tr><td class="text-end pe-3">TOTAL BOBOT KESELURUHAN:</td><td class="${warnaTotal} fs-5">${totalBobot} %</td><td></td></tr>`;
+    } else {
+        tb.innerHTML = '<tr><td colspan="3" class="text-muted py-3">Belum ada komponen nilai.</td></tr>';
+        tf.innerHTML = '';
+    }
+}
+
+function bukaModalKomponenNilai() {
+    document.getElementById("formKomponenNama").value = "";
+    document.getElementById("formKomponenBobot").value = "";
+    if(!modalKomponenInstance) modalKomponenInstance = new bootstrap.Modal(document.getElementById('modalKomponen'));
+    modalKomponenInstance.show();
+}
+
+async function simpanKomponenNilai() {
+    const nama = document.getElementById("formKomponenNama").value.trim();
+    const bobot = parseInt(document.getElementById("formKomponenBobot").value);
+    
+    if (!nama || isNaN(bobot)) return showAlertBS("Perhatian", "Semua kolom wajib diisi dengan benar!", "warning");
+    
+    const { error } = await supabaseClient.from('komponen_nilai').insert([{ nama_komponen: nama, bobot_persen: bobot }]);
+    
+    if (error) {
+        showAlertBS("Gagal", error.message, "error");
+    } else {
+        modalKomponenInstance.hide();
+        showAlertBS("Berhasil", "Komponen Nilai ditambahkan.", "success");
+        loadKomponenNilai();
+    }
+}
+
+async function hapusKomponen(id) {
+    showConfirmBS("Yakin ingin menghapus komponen nilai ini?", async () => {
+        const { error } = await supabaseClient.from('komponen_nilai').delete().eq('id', id);
+        if (error) showAlertBS("Gagal", error.message, "error");
+        else loadKomponenNilai();
+    });
+}
+
+// =====================================================================
+// [MODUL E-RAPORT] SISI GURU: KELOLA MAPEL, KKM, & TEKS CP
+// =====================================================================
+
+let currentTahunAktif = null;
+let modalTambahMapelInstance, modalInputCPInstance;
+
+// Cek Tahun Ajaran Aktif (Supaya guru tidak input di tahun yang salah)
+async function cekTahunAktif() {
+    const { data } = await supabaseClient.from('tahun_ajaran').select('*').eq('status_aktif', true).maybeSingle();
+    return data;
+}
+
+// 1. Tampilkan Daftar Mapel Guru
+async function loadMapelGuru() {
+    const wadah = document.getElementById("wadahMapelGuru");
+    wadah.innerHTML = '<div class="col-12 text-center py-4"><i class="fa-solid fa-spinner fa-spin fs-3 text-primary mb-2"></i><br>Memuat Mata Pelajaran...</div>';
+    
+    let tahun = await cekTahunAktif();
+    if (!tahun) {
+        wadah.innerHTML = '<div class="col-12"><div class="alert alert-danger text-center fw-bold shadow-sm">Admin belum mengaktifkan Tahun Ajaran. Hubungi Admin!</div></div>';
+        return;
+    }
+    
+    currentTahunAktif = tahun;
+    document.getElementById("lblTahunMapel").innerText = `Tahun ${tahun.tahun} - Semester ${tahun.semester}`;
+    
+    if (tahun.is_locked) {
+        document.getElementById("lblTahunMapel").innerHTML += ` <span class="badge bg-danger ms-2"><i class="fa-solid fa-lock"></i> Terkunci</span>`;
+    }
+
+    const nip = currentUser.identitas || currentUser.username;
+    
+    // Tarik data mapel sekaligus data teks_cp (Foreign Key)
+    const { data, error } = await supabaseClient
+        .from('mapel_guru')
+        .select('*, capaian_kompetensi(id, teks_cp)')
+        .eq('nip_guru', nip)
+        .eq('id_tahun', tahun.id);
+
+    if (error) { wadah.innerHTML = `<div class="col-12 text-danger">Error: ${error.message}</div>`; return; }
+
+    if (data && data.length > 0) {
+        wadah.innerHTML = data.map(m => {
+            let cpData = (m.capaian_kompetensi && m.capaian_kompetensi.length > 0) ? m.capaian_kompetensi[0] : null;
+            let badgeCP = cpData ? '<span class="badge bg-success mb-2 shadow-sm"><i class="fa-solid fa-check"></i> CP Sudah Diisi</span>' : '<span class="badge bg-danger mb-2 shadow-sm"><i class="fa-solid fa-xmark"></i> CP Kosong</span>';
+            
+            // Encode teks CP agar aman saat dilempar ke fungsi via tombol
+            let teksCPAman = cpData ? encodeURIComponent(cpData.teks_cp) : "";
+            let idCPTabel = cpData ? cpData.id : "";
+            
+            // PERBAIKAN TAHAP 3: Tombol sekarang memanggil fungsi bukaKelolaNilai
+            let btnKelolaNilai = tahun.is_locked 
+                ? `<button class="btn btn-sm btn-secondary w-100 fw-bold" disabled><i class="fa-solid fa-lock"></i> Terkunci</button>`
+                : `<button class="btn btn-sm btn-primary w-100 fw-bold" onclick="bukaKelolaNilai('${m.id}', '${m.nama_mapel}', '${m.kelas}')"><i class="fa-solid fa-clipboard-list"></i> Kelola Nilai</button>`;
+
+            return `
+            <div class="col-12 col-md-6 mb-3">
+                <div class="card bg-white border-0 shadow-sm rounded-4 border-start border-primary border-4 h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-1">${m.nama_mapel}</h6>
+                                <span class="badge bg-secondary">Kelas: ${m.kelas}</span>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted d-block" style="font-size: 0.7rem;">KKM</small>
+                                <h3 class="fw-bold text-primary m-0">${m.kkm}</h3>
+                            </div>
+                        </div>
+                        ${badgeCP}
+                        <hr class="my-2">
+                        <div class="d-flex gap-2 mt-3">
+                            <button class="btn btn-sm btn-outline-success w-100 fw-bold" onclick="bukaModalCP('${m.id}', '${idCPTabel}', '${teksCPAman}')"><i class="fa-solid fa-pen-nib"></i> Teks CP</button>
+                            ${btnKelolaNilai}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join("");
+    } else {
+        wadah.innerHTML = '<div class="col-12"><div class="alert alert-warning text-center fw-bold shadow-sm">Anda belum menambahkan mata pelajaran di semester ini.</div></div>';
+    }
+}
+
+// 2. Fitur Tambah Kelas/Mapel (Multi-Select Checkbox)
+function bukaModalTambahMapel() {
+    if (!currentTahunAktif) return showAlertBS("Perhatian", "Tahun Ajaran belum diaktifkan Admin!", "warning");
+    if (currentTahunAktif.is_locked) return showAlertBS("Terkunci", "Semester ini sudah ditutup, tidak bisa tambah mapel baru.", "danger");
+
+    document.getElementById("formNamaMapel").value = "";
+    document.getElementById("formKkmMapel").value = "";
+    
+    // Render Checkbox Kelas dari dataMaster
+    let wadahKelas = document.getElementById("wadahPilihKelasMapel");
+    if (dataMaster && dataMaster.kelas && dataMaster.kelas.length > 0) {
+        wadahKelas.innerHTML = dataMaster.kelas.map((k, i) => `
+            <div class="form-check">
+                <input class="form-check-input cb-kelas-mapel" type="checkbox" value="${k}" id="cbKls_${i}">
+                <label class="form-check-label text-dark" for="cbKls_${i}">${k}</label>
+            </div>
+        `).join("");
+    } else {
+        wadahKelas.innerHTML = '<span class="text-muted small">Data kelas belum tersedia. Tunggu loading awal selesai.</span>';
+    }
+
+    if(!modalTambahMapelInstance) modalTambahMapelInstance = new bootstrap.Modal(document.getElementById('modalTambahMapel'));
+    modalTambahMapelInstance.show();
+}
+
+async function simpanMapelGuru() {
+    const namaMapel = document.getElementById("formNamaMapel").value.trim();
+    const kkm = parseInt(document.getElementById("formKkmMapel").value);
+    
+    // Ambil semua nilai (value) dari checkbox yang dicentang oleh Guru
+    const cbTerpilih = document.querySelectorAll(".cb-kelas-mapel:checked");
+    let kelasArray = Array.from(cbTerpilih).map(cb => cb.value);
+
+    // Validasi: Pastikan KKM diisi dan minimal 1 kelas dicentang
+    if (!namaMapel || kelasArray.length === 0 || isNaN(kkm)) {
+        return showAlertBS("Perhatian", "Lengkapi Nama Mapel, centang minimal 1 Kelas, dan isi angka KKM!", "warning");
+    }
+
+    const nip = currentUser.identitas || currentUser.username;
+    
+    // Bikin struktur data JAMAK (Array of Objects) untuk di-insert ke Supabase sekaligus
+    let dataInsert = kelasArray.map(kls => ({
+        nip_guru: nip,
+        nama_mapel: namaMapel,
+        kelas: kls,
+        kkm: kkm,
+        id_tahun: currentTahunAktif.id
+    }));
+
+    // Ubah tombol jadi loading
+    const btn = document.querySelector("#modalTambahMapel .btn-primary");
+    let teksAsli = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Menyimpan...';
+    btn.disabled = true;
+
+    // Supabase mampu menelan Array of Objects sekaligus (Bulk Insert)
+    const { error } = await supabaseClient.from('mapel_guru').insert(dataInsert);
+
+    // Kembalikan tombol
+    btn.innerHTML = teksAsli;
+    btn.disabled = false;
+
+    if (error) {
+        showAlertBS("Gagal", error.message, "error");
+    } else {
+        modalTambahMapelInstance.hide();
+        // Beri tahu guru berapa banyak kelas yang berhasil dibuat
+        showAlertBS("Berhasil", `${kelasArray.length} Mata Pelajaran berhasil ditambahkan sekaligus ke profil Anda!`, "success");
+        loadMapelGuru();
+    }
+}
+
+// 3. Fitur Capaian Kompetensi (CP)
+function bukaModalCP(idMapel, idTabel, teksCPAman) {
+    if (currentTahunAktif && currentTahunAktif.is_locked) return showAlertBS("Terkunci", "Semester ini sudah ditutup, tidak bisa mengubah Teks CP.", "danger");
+
+    document.getElementById("cpIdMapel").value = idMapel;
+    document.getElementById("cpIdTabel").value = idTabel || "";
+    
+    // Decode kembali teks CP jika sudah ada isinya
+    document.getElementById("teksCPGuru").value = teksCPAman ? decodeURIComponent(teksCPAman) : "";
+
+    if(!modalInputCPInstance) modalInputCPInstance = new bootstrap.Modal(document.getElementById('modalInputCP'));
+    modalInputCPInstance.show();
+}
+
+async function simpanCPGuru() {
+    const idMapel = document.getElementById("cpIdMapel").value;
+    const idTabel = document.getElementById("cpIdTabel").value;
+    const teksCP = document.getElementById("teksCPGuru").value.trim();
+
+    if (!teksCP) return showAlertBS("Perhatian", "Teks CP tidak boleh kosong!", "warning");
+
+    let errorResult = null;
+
+    if (idTabel) {
+        // Jika sudah ada CP, lakukan UPDATE
+        const { error } = await supabaseClient.from('capaian_kompetensi').update({ teks_cp: teksCP }).eq('id', idTabel);
+        errorResult = error;
+    } else {
+        // Jika baru pertama kali, lakukan INSERT
+        const { error } = await supabaseClient.from('capaian_kompetensi').insert([{ id_mapel: idMapel, teks_cp: teksCP }]);
+        errorResult = error;
+    }
+
+    if (errorResult) {
+        showAlertBS("Gagal Menyimpan", errorResult.message, "error");
+    } else {
+        modalInputCPInstance.hide();
+        showAlertBS("Berhasil", "Teks Capaian Kompetensi (CP) berhasil disimpan!", "success");
+        loadMapelGuru(); // Segarkan tampilan mapel
+    }
+}
+
+// =====================================================================
+// [MODUL E-RAPORT] TAHAP 3: KELOLA TUGAS & INPUT NILAI
+// =====================================================================
+
+let currentMapelId = null;
+let currentMapelKelas = null;
+let modalTambahTugasInstance, modalInputNilaiInstance;
+
+// 1. Navigasi Tampilan
+function bukaKelolaNilai(idMapel, namaMapel, kelas) {
+    currentMapelId = idMapel;
+    currentMapelKelas = kelas;
+    
+    document.getElementById("wadahMapelGuru").style.display = "none";
+    document.getElementById("wadahKelolaNilai").style.display = "block";
+    
+    document.getElementById("lblJudulKelolaNilai").innerText = namaMapel.toUpperCase();
+    document.getElementById("lblKelasKelolaNilai").innerText = `KELAS: ${kelas}`;
+    
+    loadTugasGuru();
+}
+
+function kembaliKeMapelEraport() {
+    document.getElementById("wadahKelolaNilai").style.display = "none";
+    document.getElementById("wadahMapelGuru").style.display = "flex"; // pakai flex karena row
+}
+
+// 2. Load Daftar Tugas
+async function loadTugasGuru() {
+    const tb = document.getElementById("tbTugasGuru");
+    tb.innerHTML = '<tr><td colspan="4" class="py-4"><i class="fa-solid fa-spinner fa-spin fs-4 text-primary"></i></td></tr>';
+
+    // Ambil tugas beserta nama komponennya
+    const { data, error } = await supabaseClient
+        .from('tugas_guru')
+        .select('*, komponen_nilai(nama_komponen)')
+        .eq('id_mapel', currentMapelId)
+        .order('tanggal', { ascending: false });
+
+    if (error) { tb.innerHTML = `<tr><td colspan="4" class="text-danger">Error: ${error.message}</td></tr>`; return; }
+
+    if (data && data.length > 0) {
+        tb.innerHTML = data.map(t => {
+            let namaKomponen = t.komponen_nilai ? t.komponen_nilai.nama_komponen : "-";
+            let tglFormat = new Date(t.tanggal).toLocaleDateString('id-ID');
+            // Hindari error tanda kutip pada nama tugas
+            let namaAman = t.nama_tugas.replace(/'/g, "\\'");
+            
+            return `<tr>
+                <td class="fw-bold">${tglFormat}</td>
+                <td class="text-start">${t.nama_tugas}</td>
+                <td><span class="badge bg-secondary">${namaKomponen}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-success fw-bold shadow-sm me-1" onclick="bukaModalInputNilai('${t.id}', '${namaAman}')"><i class="fa-solid fa-keyboard"></i> Input</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="hapusTugasGuru('${t.id}')"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>`;
+        }).join("");
+    } else {
+        tb.innerHTML = '<tr><td colspan="4" class="text-muted py-4">Belum ada tugas/ujian. Klik Buat Tugas!</td></tr>';
+    }
+}
+
+// 3. Tambah Tugas
+async function bukaModalTambahTugas() {
+    document.getElementById("formTugasNama").value = "";
+    document.getElementById("formTugasTanggal").value = new Date().toISOString().split('T')[0];
+    
+    // Ambil daftar komponen (Formatif, Sumatif, dll) dari database
+    const selKomponen = document.getElementById("formTugasKomponen");
+    selKomponen.innerHTML = '<option value="">Memuat...</option>';
+    
+    const { data } = await supabaseClient.from('komponen_nilai').select('*').order('nama_komponen');
+    if (data) {
+        selKomponen.innerHTML = '<option value="">-- Pilih Komponen --</option>' + 
+            data.map(k => `<option value="${k.id}">${k.nama_komponen} (${k.bobot_persen}%)</option>`).join("");
+    }
+    
+    if(!modalTambahTugasInstance) modalTambahTugasInstance = new bootstrap.Modal(document.getElementById('modalTambahTugas'));
+    modalTambahTugasInstance.show();
+}
+
+async function simpanTugasGuru() {
+    const idKomponen = document.getElementById("formTugasKomponen").value;
+    const namaTugas = document.getElementById("formTugasNama").value.trim();
+    const tgl = document.getElementById("formTugasTanggal").value;
+    
+    if (!idKomponen || !namaTugas || !tgl) return showAlertBS("Perhatian", "Semua kolom wajib diisi!", "warning");
+    
+    const { error } = await supabaseClient.from('tugas_guru').insert([{
+        id_mapel: currentMapelId,
+        id_komponen: idKomponen,
+        nama_tugas: namaTugas,
+        tanggal: tgl
+    }]);
+
+    if (error) showAlertBS("Gagal", error.message, "error");
+    else {
+        modalTambahTugasInstance.hide();
+        showAlertBS("Berhasil", "Tugas baru ditambahkan.", "success");
+        loadTugasGuru();
+    }
+}
+
+async function hapusTugasGuru(idTugas) {
+    showConfirmBS("Yakin hapus tugas ini? SELURUH NILAI SISWA pada tugas ini juga akan terhapus permanen!", async () => {
+        // Hapus nilainya dulu (agar foreign key tidak bentrok), baru hapus tugasnya
+        await supabaseClient.from('nilai_siswa').delete().eq('id_tugas', idTugas);
+        const { error } = await supabaseClient.from('tugas_guru').delete().eq('id', idTugas);
+        
+        if (error) showAlertBS("Gagal", error.message, "error");
+        else loadTugasGuru();
+    });
+}
+
+// 4. Input Nilai Siswa
+async function bukaModalInputNilai(idTugas, namaTugas) {
+    document.getElementById("inputNilaiIdTugas").value = idTugas;
+    document.getElementById("lblInputNilaiTugas").innerText = `${namaTugas} | Kelas: ${currentMapelKelas}`;
+    
+    const tb = document.getElementById("tbInputNilaiSiswa");
+    tb.innerHTML = '<tr><td colspan="3" class="py-5"><i class="fa-solid fa-spinner fa-spin fa-2x text-primary mb-2"></i><br>Mengambil data siswa & nilai...</td></tr>';
+    
+    if(!modalInputNilaiInstance) modalInputNilaiInstance = new bootstrap.Modal(document.getElementById('modalInputNilai'));
+    modalInputNilaiInstance.show();
+
+    // PERBAIKAN: Ambil data siswa langsung dari database Supabase agar pasti ada dan tidak error
+    const { data: dataSiswa, error: errSiswa } = await supabaseClient
+        .from('users')
+        .select('*')
+        .eq('role', 'siswa')
+        .eq('kelas', currentMapelKelas);
+
+    if (errSiswa) {
+        tb.innerHTML = `<tr><td colspan="3" class="text-danger py-4">Gagal memuat siswa: ${errSiswa.message}</td></tr>`;
+        return;
+    }
+
+    let siswaKelas = dataSiswa || [];
+    
+    // Sortir nama siswa sesuai abjad
+    siswaKelas.sort((a, b) => {
+        let namaA = a.nama_lengkap || a.nama || a.username || "";
+        let namaB = b.nama_lengkap || b.nama || b.username || "";
+        return namaA.localeCompare(namaB);
+    });
+
+    // Ambil data nilai yang sudah pernah diinput sebelumnya (jika ada)
+    const { data: nilaiSiswaDb } = await supabaseClient.from('nilai_siswa').select('*').eq('id_tugas', idTugas);
+    let mapNilai = {};
+    if (nilaiSiswaDb) {
+        nilaiSiswaDb.forEach(n => { mapNilai[n.nisn] = n.nilai; }); // nisn di nilai_siswa berelasi dengan username
+    }
+
+    if (siswaKelas.length > 0) {
+        tb.innerHTML = siswaKelas.map((s, i) => {
+            // Cek nama, di tabel users biasanya nama_lengkap atau nama
+            let namaTampil = s.nama_lengkap || s.nama || s.username; 
+            let nilaiTersimpan = mapNilai[s.username] !== undefined ? mapNilai[s.username] : '';
+            
+            return `<tr>
+                <td class="fw-bold">${i + 1}</td>
+                <td class="text-start"><b>${namaTampil}</b><br><small class="text-muted">NISN: ${s.username}</small></td>
+                <td>
+                    <input type="number" class="form-control text-center fw-bold input-form-nilai text-primary" 
+                           data-nisn="${s.username}" value="${nilaiTersimpan}" placeholder="0" min="0" max="100">
+                </td>
+            </tr>`;
+        }).join("");
+    } else {
+        tb.innerHTML = '<tr><td colspan="3" class="text-danger fw-bold py-4">Tidak ada siswa di kelas ini.<br><small class="text-muted">Pastikan format penulisan nama kelas sama persis dengan kelas di akun siswa.</small></td></tr>';
+    }
+}
+
+async function simpanSemuaNilai() {
+    const idTugas = document.getElementById("inputNilaiIdTugas").value;
+    const inputs = document.querySelectorAll('.input-form-nilai');
+    
+    let dataInsert = [];
+    inputs.forEach(input => {
+        let nisn = input.getAttribute('data-nisn');
+        // Hanya simpan jika ada nilainya (tidak kosong)
+        if (input.value !== '') {
+            let nilai = parseInt(input.value);
+            // Validasi jangan sampai melebihi 100 atau minus
+            if (nilai > 100) nilai = 100;
+            if (nilai < 0) nilai = 0;
+            
+            dataInsert.push({ id_tugas: idTugas, nisn: nisn, nilai: nilai });
+        }
+    });
+
+    const btnSimpan = document.querySelector("#modalInputNilai .btn-success");
+    let teksLama = btnSimpan.innerHTML;
+    btnSimpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...';
+    btnSimpan.disabled = true;
+
+    // ALGORITMA BULK UPSERT: 
+    // 1. Bersihkan semua nilai lama untuk tugas ini
+    await supabaseClient.from('nilai_siswa').delete().eq('id_tugas', idTugas);
+    
+    // 2. Masukkan array nilai baru sekaligus
+    let errorResult = null;
+    if (dataInsert.length > 0) {
+        const { error } = await supabaseClient.from('nilai_siswa').insert(dataInsert);
+        errorResult = error;
+    }
+
+    btnSimpan.innerHTML = teksLama;
+    btnSimpan.disabled = false;
+
+    if (errorResult) {
+        showAlertBS("Gagal", errorResult.message, "error");
+    } else {
+        modalInputNilaiInstance.hide();
+        showAlertBS("Tersimpan!", `${dataInsert.length} Nilai siswa berhasil disimpan.`, "success");
+    }
+}
+
+// ---------------- 3. PENGELOMPOKAN MAPEL (ADMIN) ----------------
+function initDropdownKelasKelompok() {
+    let sel = document.getElementById("filterKelasKelompok");
+    if(dataMaster && dataMaster.kelas) {
+        let opsi = dataMaster.kelas.map(k => `<option value="${k}">${k}</option>`).join("");
+        sel.innerHTML = '<option value="">-- Silakan Pilih Kelas --</option>' + opsi;
+    }
+}
+
+// Dipanggil otomatis saat Admin buka tab E-Raport (Tambahkan ini di dalam loadPengaturanEraport)
+// Contoh: function loadPengaturanEraport() { loadTahunAjaran(); loadKomponenNilai(); initDropdownKelasKelompok(); }
+
+// ---------------- 3. PENGELOMPOKAN MAPEL (GAYA BUILDER) ----------------
+let currentMapelKelasList = []; // Simpan sementara data mapel agar modal cepat buka
+let modalKelompokInstance;
+
+function initDropdownKelasKelompok() {
+    let sel = document.getElementById("filterKelasKelompok");
+    if(dataMaster && dataMaster.kelas) {
+        let opsi = dataMaster.kelas.map(k => `<option value="${k}">${k}</option>`).join("");
+        sel.innerHTML = '<option value="">-- Silakan Pilih Kelas --</option>' + opsi;
+    }
+}
+
+async function loadMapelUntukKelompok() {
+    const kelas = document.getElementById("filterKelasKelompok").value;
+    const wadah = document.getElementById("wadahKelompokMapel");
+    const btnTambah = document.getElementById("btnTambahKelompok");
+    
+    if(!kelas) { 
+        wadah.innerHTML = '<div class="alert alert-secondary">Pilih kelas di atas terlebih dahulu.</div>'; 
+        btnTambah.style.display = 'none';
+        return; 
+    }
+    
+    wadah.innerHTML = '<div class="py-5 text-center"><i class="fa-solid fa-spinner fa-spin text-primary fs-2 mb-3"></i><br>Menyusun data pelajaran...</div>';
+    btnTambah.style.display = 'none';
+    
+    const { data: tahunAktif } = await supabaseClient.from('tahun_ajaran').select('id').eq('status_aktif', true).single();
+    if(!tahunAktif) { wadah.innerHTML = '<div class="alert alert-danger">Tahun Ajaran aktif belum ada.</div>'; return; }
+
+    const { data, error } = await supabaseClient
+        .from('mapel_guru')
+        .select('*, users(nama_lengkap)')
+        .eq('kelas', kelas)
+        .eq('id_tahun', tahunAktif.id);
+    
+    if(error) { wadah.innerHTML = `<div class="alert alert-danger">${error.message}</div>`; return; }
+    
+    currentMapelKelasList = data || [];
+    btnTambah.style.display = 'inline-block';
+    
+    if(currentMapelKelasList.length === 0) {
+        wadah.innerHTML = '<div class="alert alert-warning fw-bold border-0 shadow-sm"><i class="fa-solid fa-triangle-exclamation me-2"></i>Belum ada Guru yang membuat Mapel di kelas ini.</div>';
+        return;
+    }
+
+    // Algoritma Pengelompokan UI
+    let grouped = {};
+    let belumDikelompokkan = [];
+
+    currentMapelKelasList.forEach(m => {
+        let kat = m.kategori_mapel;
+        if (!kat || kat.trim() === '') {
+            belumDikelompokkan.push(m);
+        } else {
+            if(!grouped[kat]) grouped[kat] = [];
+            grouped[kat].push(m);
+        }
+    });
+
+    let html = '';
+
+    // Render Mapel yang Belum Punya Kelompok (Warna Merah)
+    if (belumDikelompokkan.length > 0) {
+        html += `
+        <div class="card mb-4 border-danger shadow-sm rounded-4 overflow-hidden">
+            <div class="card-header bg-danger text-white fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Belum Dikelompokkan</div>
+            <ul class="list-group list-group-flush">
+                ${belumDikelompokkan.map(m => `<li class="list-group-item d-flex justify-content-between align-items-center py-3"><b>${m.nama_mapel}</b> <span class="badge bg-light text-dark border">Guru: ${m.users?m.users.nama_lengkap:m.nip_guru}</span></li>`).join('')}
+            </ul>
+        </div>`;
+    }
+
+    // Render Mapel yang Sudah Dikelompokkan (Warna Biru)
+    for (let kat in grouped) {
+        html += `
+        <div class="card mb-4 border-primary shadow-sm rounded-4 overflow-hidden">
+            <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-folder me-2"></i>${kat}</span>
+                <button class="btn btn-sm btn-light text-primary fw-bold shadow-sm" onclick="bukaModalKelompok('${kat}')"><i class="fa-solid fa-edit"></i> Edit</button>
+            </div>
+            <ul class="list-group list-group-flush">
+                ${grouped[kat].map(m => `<li class="list-group-item d-flex justify-content-between align-items-center py-2"><b>${m.nama_mapel}</b> <small class="text-muted">${m.users?m.users.nama_lengkap:m.nip_guru}</small></li>`).join('')}
+            </ul>
+        </div>`;
+    }
+
+    wadah.innerHTML = html;
+}
+
+function bukaModalKelompok(namaKatLama) {
+    if(!modalKelompokInstance) modalKelompokInstance = new bootstrap.Modal(document.getElementById('modalKelompokMapel'));
+    
+    document.getElementById("formKelompokLama").value = namaKatLama;
+    document.getElementById("formNamaKelompok").value = namaKatLama;
+    
+    let wadahCb = document.getElementById("wadahCheckboxMapel");
+    
+    // Render semua mapel yang ada di kelas ini sebagai checkbox
+    wadahCb.innerHTML = currentMapelKelasList.map((m, i) => {
+        let isChecked = (m.kategori_mapel === namaKatLama && namaKatLama !== '') ? 'checked' : '';
+        let namaGuru = m.users ? m.users.nama_lengkap : m.nip_guru;
+        return `
+        <div class="form-check border-bottom py-2">
+            <input class="form-check-input cb-mapel-kelompok" type="checkbox" value="${m.id}" id="cbMapelKat_${i}" ${isChecked} style="transform: scale(1.3); margin-top: 10px;">
+            <label class="form-check-label text-dark w-100 ms-2" for="cbMapelKat_${i}">
+                <b class="fs-6">${m.nama_mapel}</b> <br><small class="text-muted">Guru: ${namaGuru}</small>
+            </label>
+        </div>`;
+    }).join('');
+    
+    modalKelompokInstance.show();
+}
+
+async function simpanKelompokMapel() {
+    const namaKatLama = document.getElementById("formKelompokLama").value;
+    const namaKatBaru = document.getElementById("formNamaKelompok").value.trim();
+    const kelas = document.getElementById("filterKelasKelompok").value;
+
+    const cbTerpilih = document.querySelectorAll(".cb-mapel-kelompok:checked");
+    let idTerpilih = Array.from(cbTerpilih).map(cb => cb.value);
+
+    if(!namaKatBaru) return showAlertBS("Perhatian", "Nama Kelompok tidak boleh kosong!", "warning");
+    if(idTerpilih.length === 0) return showAlertBS("Perhatian", "Centang minimal 1 mata pelajaran!", "warning");
+
+    const btn = document.querySelector("#modalKelompokMapel .btn-success");
+    let teksLama = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...';
+    btn.disabled = true;
+
+    // 1. Keluarkan semua mapel dari kelompok lama (Reset ke null) agar tidak bentrok
+    if (namaKatLama !== '') {
+        await supabaseClient.from('mapel_guru').update({ kategori_mapel: null }).eq('kelas', kelas).eq('kategori_mapel', namaKatLama);
+    }
+
+    // 2. Masukkan mapel yang dicentang ke dalam kelompok baru menggunakan Bulk Update (in)
+    const { error } = await supabaseClient.from('mapel_guru').update({ kategori_mapel: namaKatBaru }).in('id', idTerpilih);
+
+    btn.innerHTML = teksLama;
+    btn.disabled = false;
+
+    if (error) {
+        showAlertBS("Gagal", error.message, "error");
+    } else {
+        modalKelompokInstance.hide();
+        showAlertBS("Berhasil", "Kelompok Mapel berhasil disusun!", "success");
+        loadMapelUntukKelompok(); // Segarkan tampilan
+    }
+}
+
+// =====================================================================
+// [MODUL E-RAPORT] TAHAP 4: ENGINE CETAK WALI KELAS
+// =====================================================================
+let modalCatatanWaliInstance;
+let tahunAktifRaporCache = null;
+
+async function loadSiswaUntukRaport() {
+    const kls = currentUser.kelas;
+    document.getElementById("lblKelasEraportWali").innerText = `Kelas: ${kls || '-'}`;
+    
+    const tb = document.getElementById("tbSiswaRaportWali");
+    if(!kls) { tb.innerHTML = '<tr><td colspan="4" class="text-danger py-4">Anda belum ditugaskan di kelas manapun.</td></tr>'; return; }
+    
+    tb.innerHTML = '<tr><td colspan="4" class="py-4"><i class="fa-solid fa-spinner fa-spin text-success fs-3"></i><br>Memuat data...</td></tr>';
+    
+    // 1. Ambil Tahun Aktif
+    const { data: tahunAktif } = await supabaseClient.from('tahun_ajaran').select('*').eq('status_aktif', true).single();
+    if(!tahunAktif) { tb.innerHTML = '<tr><td colspan="4" class="text-danger py-4">Tahun Ajaran aktif belum diatur Admin.</td></tr>'; return; }
+    tahunAktifRaporCache = tahunAktif;
+
+    // 2. PERBAIKAN: Ambil Siswa Langsung dari Database Supabase (Aman dari Refresh)
+    const { data: dataSiswa, error: errSiswa } = await supabaseClient
+        .from('users')
+        .select('*')
+        .eq('role', 'siswa')
+        .eq('kelas', kls);
+
+    if (errSiswa) { 
+        tb.innerHTML = `<tr><td colspan="4" class="text-danger py-4">Error memuat siswa: ${errSiswa.message}</td></tr>`; 
+        return; 
+    }
+
+    let siswaKelas = dataSiswa || [];
+    
+    // Sortir abjad
+    siswaKelas.sort((a, b) => {
+        let namaA = a.nama_lengkap || a.nama || a.username || "";
+        let namaB = b.nama_lengkap || b.nama || b.username || "";
+        return namaA.localeCompare(namaB);
+    });
+    
+    // 3. Ambil data rapor (catatan wali) yang sudah diisi
+    const { data: dataRaporDb } = await supabaseClient.from('rapor_walikelas').select('*').eq('id_tahun', tahunAktif.id);
+    let mapRapor = {};
+    if(dataRaporDb) { dataRaporDb.forEach(r => { mapRapor[r.nisn] = r; }); }
+
+    if(siswaKelas.length > 0) {
+        tb.innerHTML = siswaKelas.map((s, i) => {
+            let nisn = s.username; // Menggunakan username sebagai NISN
+            let namaSiswa = s.nama_lengkap || s.nama || nisn;
+            
+            let adaCatatan = mapRapor[nisn] ? true : false;
+            let idRapor = adaCatatan ? mapRapor[nisn].id : '';
+            
+            let badge = adaCatatan 
+                ? '<span class="badge bg-success shadow-sm"><i class="fa-solid fa-check"></i> Sudah Diisi</span>' 
+                : '<span class="badge bg-warning text-dark shadow-sm"><i class="fa-solid fa-circle-exclamation"></i> Belum Diisi</span>';
+                
+            let namaAman = namaSiswa.replace(/'/g, "\\'");
+            let btnPelengkap = `<button class="btn btn-sm btn-outline-primary fw-bold me-1" onclick="bukaModalCatatan('${nisn}', '${namaAman}', '${idRapor}')"><i class="fa-solid fa-pen-to-square"></i> Input Pelengkap</button>`;
+            let btnCetak = `<button class="btn btn-sm btn-success fw-bold shadow-sm" onclick="cetakRaporPDF('${nisn}', '${namaAman}')"><i class="fa-solid fa-print"></i> Cetak</button>`;
+
+            return `<tr>
+                <td class="fw-bold">${i+1}</td>
+                <td class="text-start"><b>${namaSiswa}</b><br><small class="text-muted">NISN: ${nisn}</small></td>
+                <td>${badge}</td>
+                <td>${btnPelengkap} ${btnCetak}</td>
+            </tr>`;
+        }).join("");
+    } else {
+        tb.innerHTML = '<tr><td colspan="4" class="text-danger py-4">Tidak ada siswa di kelas ini.</td></tr>';
+    }
+}
+
+// --- FUNGSI SIMPAN CATATAN ---
+async function bukaModalCatatan(nisn, nama, idRapor) {
+    document.getElementById("lblNamaSiswaRapor").innerText = nama;
+    document.getElementById("formRaporNisn").value = nisn;
+    document.getElementById("formRaporId").value = idRapor;
+    
+    // Reset Form
+    document.getElementById("formRaporCatatan").value = "";
+    document.getElementById("formRaporNamaEkskul").value = "";
+    document.getElementById("formRaporNilaiEkskul").value = "";
+    document.getElementById("formRaporNamaPkl").value = "";
+    document.getElementById("formRaporNilaiPkl").value = "";
+
+    // Load data lama jika ada
+    if(idRapor && idRapor !== '') {
+        const { data } = await supabaseClient.from('rapor_walikelas').select('*').eq('id', idRapor).single();
+        if(data) {
+            document.getElementById("formRaporCatatan").value = data.catatan || "";
+            document.getElementById("formRaporNamaEkskul").value = data.nama_ekskul || "";
+            document.getElementById("formRaporNilaiEkskul").value = data.nilai_ekskul || "";
+            document.getElementById("formRaporNamaPkl").value = data.nama_pkl || "";
+            document.getElementById("formRaporNilaiPkl").value = data.nilai_pkl || "";
+        }
+    }
+
+    if(!modalCatatanWaliInstance) modalCatatanWaliInstance = new bootstrap.Modal(document.getElementById('modalCatatanWali'));
+    modalCatatanWaliInstance.show();
+}
+
+async function simpanRaporWali() {
+    const id = document.getElementById("formRaporId").value;
+    const nisn = document.getElementById("formRaporNisn").value;
+    
+    let payload = {
+        nisn: nisn,
+        id_tahun: tahunAktifRaporCache.id,
+        catatan: document.getElementById("formRaporCatatan").value.trim(),
+        nama_ekskul: document.getElementById("formRaporNamaEkskul").value.trim(),
+        nilai_ekskul: document.getElementById("formRaporNilaiEkskul").value,
+        nama_pkl: document.getElementById("formRaporNamaPkl").value.trim(),
+        nilai_pkl: document.getElementById("formRaporNilaiPkl").value
+    };
+
+    let errorResult = null;
+    if(id && id !== '') {
+        const { error } = await supabaseClient.from('rapor_walikelas').update(payload).eq('id', id);
+        errorResult = error;
+    } else {
+        const { error } = await supabaseClient.from('rapor_walikelas').insert([payload]);
+        errorResult = error;
+    }
+
+    if(errorResult) showAlertBS("Gagal", errorResult.message, "error");
+    else {
+        modalCatatanWaliInstance.hide();
+        showAlertBS("Berhasil", "Data pelengkap rapor tersimpan.", "success");
+        loadSiswaUntukRaport();
+    }
+}
+
+// =================================================================================
+// ENGINE UTAMA: CETAK PDF E-RAPORT (MATEMATIKA & RENDERING)
+// =================================================================================
+
+async function cetakRaporPDF(nisn, namaSiswa) {
+    showAlertBS("Memproses", "Sedang menghitung nilai dan menyusun E-Raport... Silakan tunggu.", "info");
+    
+    // 1. Persiapan Data Dasar
+    const kelasSiswa = currentUser.kelas;
+    let fase = (kelasSiswa.includes('XII') || kelasSiswa.includes('XI')) ? 'F' : 'E';
+    
+    // 2. Ambil Data Komponen Nilai (Bobot)
+    const { data: kompDb } = await supabaseClient.from('komponen_nilai').select('*');
+    let mapBobot = {};
+    if(kompDb) kompDb.forEach(k => { mapBobot[k.id] = (k.bobot_persen / 100); });
+
+    // 3. Ambil Mata Pelajaran di Kelas Ini (Beserta CP & Tugasnya)
+    const { data: mapelDb } = await supabaseClient.from('mapel_guru')
+        .select('*, capaian_kompetensi(teks_cp), tugas_guru(id, id_komponen)')
+        .eq('kelas', kelasSiswa)
+        .eq('id_tahun', tahunAktifRaporCache.id)
+        .order('kategori_mapel');
+
+    // 4. Ambil Semua Nilai milik Siswa Ini saja
+    const { data: nilaiSiswaDb } = await supabaseClient.from('nilai_siswa').select('*').eq('nisn', nisn);
+    
+    // 5. Kalkulasi Nilai Akhir per Mapel
+    let mapNilaiMapel = {}; // id_mapel -> Nilai Akhir
+    let nilaiIndex = {}; // id_tugas -> nilai siswa
+    if(nilaiSiswaDb) nilaiSiswaDb.forEach(n => { nilaiIndex[n.id_tugas] = n.nilai; });
+
+    if(mapelDb) {
+        mapelDb.forEach(m => {
+            let hitungKomp = {}; // id_komponen -> { totalNilai, jumlahTugas }
+            if(m.tugas_guru) {
+                m.tugas_guru.forEach(t => {
+                    if(nilaiIndex[t.id] !== undefined) { // Jika siswa punya nilai di tugas ini
+                        if(!hitungKomp[t.id_komponen]) hitungKomp[t.id_komponen] = { total: 0, count: 0 };
+                        hitungKomp[t.id_komponen].total += nilaiIndex[t.id];
+                        hitungKomp[t.id_komponen].count += 1;
+                    }
+                });
+            }
+            
+            // Rumus: (Rata2 Komp A * Bobot A) + (Rata2 Komp B * Bobot B) ...
+            let nilaiAkhirMurni = 0;
+            for(let idKomp in hitungKomp) {
+                let rata2 = hitungKomp[idKomp].total / hitungKomp[idKomp].count;
+                let bobot = mapBobot[idKomp] || 0;
+                nilaiAkhirMurni += (rata2 * bobot);
+            }
+            mapNilaiMapel[m.id] = Math.round(nilaiAkhirMurni);
+        });
+    }
+
+    // 6. Kelompokkan Mapel berdasarkan Kategori
+    let kelompokHTML = '';
+    let mapelGrouped = {};
+    if(mapelDb) {
+        mapelDb.forEach(m => {
+            let kat = m.kategori_mapel || 'A. MATA PELAJARAN UMUM';
+            if(!mapelGrouped[kat]) mapelGrouped[kat] = [];
+            mapelGrouped[kat].push(m);
+        });
+    }
+
+    let noUrutMapel = 1;
+    for(let kat in mapelGrouped) {
+        // Baris Header Kelompok (Misal: A. KELOMPOK MATA PELAJARAN UMUM)
+        kelompokHTML += `<tr>
+            <td class="fw-bold text-center border-black">${kat.split('.')[0] || '-'}</td>
+            <td colspan="3" class="fw-bold border-black ps-2">${kat.substring(kat.indexOf('.') + 1).trim()}</td>
+        </tr>`;
+        
+        mapelGrouped[kat].forEach(m => {
+            let na = mapNilaiMapel[m.id] || 0;
+            let teksCpAsli = (m.capaian_kompetensi && m.capaian_kompetensi.length > 0) ? m.capaian_kompetensi[0].teks_cp : 'Belum ada CP yang diisi guru.';
+            
+            // Logika Teks CP Otomatis
+            let teksCetakCP = "";
+            if (na >= m.kkm) {
+                teksCetakCP = `Peserta didik <b>Mampu</b> Dalam ${teksCpAsli}`;
+            } else {
+                teksCetakCP = `Peserta didik <b>Belum Menguasai</b> Dalam ${teksCpAsli}`;
+            }
+
+            kelompokHTML += `<tr>
+                <td class="text-center border-black">${noUrutMapel++}</td>
+                <td class="border-black ps-2">${m.nama_mapel}</td>
+                <td class="text-center border-black fw-bold">${na}</td>
+                <td class="border-black ps-2" style="font-size: 11px; text-align: justify; padding-right: 5px;">${teksCetakCP}</td>
+            </tr>`;
+        });
+    }
+
+    // 7. Ambil Data Pelengkap (Catatan & Absen)
+    const { data: dataRaporDb } = await supabaseClient.from('rapor_walikelas').select('*').eq('id_tahun', tahunAktifRaporCache.id).eq('nisn', nisn).single();
+    
+    // Hitung Absensi dari log_absensi
+    const { data: absenDb } = await supabaseClient.from('log_absensi').select('status_hadir').eq('username', nisn);
+    let countS = 0, countI = 0, countA = 0;
+    if(absenDb) {
+        absenDb.forEach(ab => {
+            if(ab.status_hadir === 'S' || ab.status_hadir === 'SAKIT') countS++;
+            else if(ab.status_hadir === 'I' || ab.status_hadir === 'IZIN') countI++;
+            else if(ab.status_hadir === 'A' || ab.status_hadir === 'ALPA') countA++;
+        });
+    }
+
+    // 8. Susun HTML Cetak (Menyerupai Referensi Anda)
+    let tglBagi = tahunAktifRaporCache.tanggal_rapor ? new Date(tahunAktifRaporCache.tanggal_rapor).toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'}) : '-';
+    let ttdWali = currentUser.nama_lengkap || currentUser.nama || 'Wali Kelas';
+    let ttdKepsek = tahunAktifRaporCache.nama_kepsek || 'H. Furqon, M.Pd., M.M';
+    let nipKepsek = tahunAktifRaporCache.nip_kepsek || '-';
+
+    let htmlCetak = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <title>Rapor_${namaSiswa}</title>
+        <style>
+            body { font-family: 'Times New Roman', Times, serif; font-size: 12px; color: black; margin: 0; padding: 20px; }
+            .border-black { border: 1px solid black; }
+            .table-rapor { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .table-rapor th, .table-rapor td { padding: 6px; }
+            .header-text { text-align: center; margin-bottom: 30px; }
+            .info-table { width: 100%; margin-bottom: 20px; font-weight: bold; }
+            .info-table td { padding: 3px; vertical-align: top; }
+            .ttd-box { width: 100%; margin-top: 30px; text-align: center; page-break-inside: avoid; }
+            @media print {
+                @page { size: A4 portrait; margin: 15mm; }
+                body { padding: 0; }
+                .no-print { display: none; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header-text">
+            <h3 style="margin:0;">LAPORAN HASIL BELAJAR AKHIR SEMESTER ${tahunAktifRaporCache.semester.toUpperCase()}</h3>
+            <h3 style="margin:0;">(RAPOR)</h3>
+        </div>
+
+        <table class="info-table">
+            <tr>
+                <td style="width: 15%;">Nama Peserta Didik</td><td style="width: 2%;">:</td><td style="width: 48%;">${namaSiswa.toUpperCase()}</td>
+                <td style="width: 15%;">Kelas</td><td style="width: 2%;">:</td><td style="width: 18%;">${kelasSiswa}</td>
+            </tr>
+            <tr>
+                <td>NISN</td><td>:</td><td>${nisn}</td>
+                <td>Fase</td><td>:</td><td>${fase}</td>
+            </tr>
+            <tr>
+                <td>Sekolah</td><td>:</td><td>SMK AD-DA'WAH</td>
+                <td>Semester</td><td>:</td><td>${tahunAktifRaporCache.semester === 'Ganjil' ? '1' : '2'}</td>
+            </tr>
+            <tr>
+                <td>Alamat</td><td>:</td><td>Jl. Raya Duri Kosambi</td>
+                <td>Tahun Pelajaran</td><td>:</td><td>${tahunAktifRaporCache.tahun}</td>
+            </tr>
+        </table>
+
+        <table class="table-rapor border-black">
+            <thead>
+                <tr>
+                    <th class="border-black" style="width: 5%;">No</th>
+                    <th class="border-black" style="width: 35%;">Muatan Pelajaran</th>
+                    <th class="border-black" style="width: 10%;">Nilai Akhir</th>
+                    <th class="border-black" style="width: 50%;">Capaian Kompetensi</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${kelompokHTML}
+            </tbody>
+        </table>
+
+        <!-- Page Break agar TTD / Absensi tidak terpotong jelek -->
+        <div style="page-break-inside: avoid;">
+            <table class="table-rapor border-black" style="width: 50%; float: left; margin-top: 20px;">
+                <tr><th colspan="3" class="border-black text-start">Ketidakhadiran: ${namaSiswa.toUpperCase()}</th></tr>
+                <tr><td class="border-black w-50">Sakit</td><td class="border-black text-center w-25">${countS}</td><td class="border-black text-center w-25">hari</td></tr>
+                <tr><td class="border-black">Izin</td><td class="border-black text-center">${countI}</td><td class="border-black text-center">hari</td></tr>
+                <tr><td class="border-black">Tanpa Keterangan</td><td class="border-black text-center">${countA}</td><td class="border-black text-center">hari</td></tr>
+            </table>
+
+            <div style="clear:both;"></div>
+
+            <table class="ttd-box">
+                <tr>
+                    <td style="width: 33%;">Orang Tua, <br><br><br><br><br>.........................................</td>
+                    <td style="width: 33%;"></td>
+                    <td style="width: 33%;">Jakarta, ${tglBagi} <br>Wali Kelas ${kelasSiswa} <br><br><br><br><br><b>${ttdWali}</b><br>NIP. -</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding-top: 30px;">
+                        Mengetahui,<br>Kepala Sekolah<br><br><br><br><br><b>${ttdKepsek}</b><br>NIP. ${nipKepsek}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </body>
+    </html>`;
+
+    // 9. Buka Tab Baru dan Eksekusi Cetak!
+    let win = window.open('', '_blank');
+    win.document.write(htmlCetak);
+    win.document.close();
+    win.setTimeout(() => { 
+        win.print(); 
+        // win.close(); // Hapus komentar ini jika ingin tab otomatis menutup setelah diprint
+    }, 800);
+}
