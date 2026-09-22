@@ -4586,7 +4586,7 @@ async function cetakRaporPDF(nisn, namaSiswa) {
             let hitungKomp = {}; // id_komponen -> { totalNilai, jumlahTugas }
             if(m.tugas_guru) {
                 m.tugas_guru.forEach(t => {
-                    if(nilaiIndex[t.id] !== undefined) { // Jika siswa punya nilai di tugas ini
+                    if(nilaiIndex[t.id] !== undefined) { 
                         if(!hitungKomp[t.id_komponen]) hitungKomp[t.id_komponen] = { total: 0, count: 0 };
                         hitungKomp[t.id_komponen].total += nilaiIndex[t.id];
                         hitungKomp[t.id_komponen].count += 1;
@@ -4594,7 +4594,7 @@ async function cetakRaporPDF(nisn, namaSiswa) {
                 });
             }
             
-            // Rumus: (Rata2 Komp A * Bobot A) + (Rata2 Komp B * Bobot B) ...
+            // Rumus: (Rata2 Komp A * Bobot A) + (Rata2 Komp B * Bobot B)
             let nilaiAkhirMurni = 0;
             for(let idKomp in hitungKomp) {
                 let rata2 = hitungKomp[idKomp].total / hitungKomp[idKomp].count;
@@ -4618,7 +4618,6 @@ async function cetakRaporPDF(nisn, namaSiswa) {
 
     let noUrutMapel = 1;
     for(let kat in mapelGrouped) {
-        // Baris Header Kelompok (Misal: A. KELOMPOK MATA PELAJARAN UMUM)
         kelompokHTML += `<tr>
             <td class="fw-bold text-center border-black">${kat.split('.')[0] || '-'}</td>
             <td colspan="3" class="fw-bold border-black ps-2">${kat.substring(kat.indexOf('.') + 1).trim()}</td>
@@ -4628,13 +4627,9 @@ async function cetakRaporPDF(nisn, namaSiswa) {
             let na = mapNilaiMapel[m.id] || 0;
             let teksCpAsli = (m.capaian_kompetensi && m.capaian_kompetensi.length > 0) ? m.capaian_kompetensi[0].teks_cp : 'Belum ada CP yang diisi guru.';
             
-            // Logika Teks CP Otomatis
-            let teksCetakCP = "";
-            if (na >= m.kkm) {
-                teksCetakCP = `Peserta didik <b>Mampu</b> Dalam ${teksCpAsli}`;
-            } else {
-                teksCetakCP = `Peserta didik <b>Belum Menguasai</b> Dalam ${teksCpAsli}`;
-            }
+            let teksCetakCP = na >= m.kkm 
+                ? `Peserta didik <b>Mampu</b> Dalam ${teksCpAsli}` 
+                : `Peserta didik <b>Belum Menguasai</b> Dalam ${teksCpAsli}`;
 
             kelompokHTML += `<tr>
                 <td class="text-center border-black">${noUrutMapel++}</td>
@@ -4645,10 +4640,49 @@ async function cetakRaporPDF(nisn, namaSiswa) {
         });
     }
 
-    // 7. Ambil Data Pelengkap (Catatan & Absen)
-    const { data: dataRaporDb } = await supabaseClient.from('rapor_walikelas').select('*').eq('id_tahun', tahunAktifRaporCache.id).eq('nisn', nisn).single();
+    // 7. Ambil Data Pelengkap (Catatan, Ekskul, PKL)
+    const { data: dataRaporDb } = await supabaseClient.from('rapor_walikelas').select('*').eq('id_tahun', tahunAktifRaporCache.id).eq('nisn', nisn).maybeSingle();
     
-    // Hitung Absensi dari log_absensi
+    // LOGIKA KONDISIONAL PELENGKAP (Munculkan hanya jika diisi)
+    let pklHTML = "";
+    let ekskulHTML = "";
+    let catatanHTML = "";
+
+    if (dataRaporDb) {
+        if (dataRaporDb.nama_pkl && dataRaporDb.nama_pkl.trim() !== '') {
+            pklHTML = `
+            <div style="margin-top: 20px;">
+                <b>Praktik Kerja Lapangan (PKL)</b>
+                <table class="table-rapor border-black" style="margin-top: 5px; margin-bottom: 5px;">
+                    <tr><th class="border-black" style="width: 5%;">No</th><th class="border-black" style="width: 45%;">Mitra DU/DI</th><th class="border-black" style="width: 50%;">Keterangan</th></tr>
+                    <tr><td class="text-center border-black">1</td><td class="border-black ps-2">${dataRaporDb.nama_pkl}</td><td class="border-black ps-2">${dataRaporDb.nilai_pkl || '-'}</td></tr>
+                </table>
+            </div>`;
+        }
+
+        if (dataRaporDb.nama_ekskul && dataRaporDb.nama_ekskul.trim() !== '') {
+            ekskulHTML = `
+            <div style="margin-top: 15px;">
+                <b>Kegiatan Ekstrakurikuler</b>
+                <table class="table-rapor border-black" style="margin-top: 5px; margin-bottom: 5px;">
+                    <tr><th class="border-black" style="width: 5%;">No</th><th class="border-black" style="width: 45%;">Kegiatan Ekstrakurikuler</th><th class="border-black" style="width: 50%;">Keterangan</th></tr>
+                    <tr><td class="text-center border-black">1</td><td class="border-black ps-2">${dataRaporDb.nama_ekskul}</td><td class="border-black ps-2">${dataRaporDb.nilai_ekskul || '-'}</td></tr>
+                </table>
+            </div>`;
+        }
+
+        if (dataRaporDb.catatan && dataRaporDb.catatan.trim() !== '') {
+            catatanHTML = `
+            <div style="margin-top: 15px; margin-bottom: 20px;">
+                <b>Catatan Wali Kelas</b>
+                <table class="table-rapor border-black" style="margin-top: 5px; margin-bottom: 5px;">
+                    <tr><td class="border-black ps-2" style="padding: 10px; height: 40px; vertical-align: top;">${dataRaporDb.catatan}</td></tr>
+                </table>
+            </div>`;
+        }
+    }
+
+    // 8. Hitung Absensi
     const { data: absenDb } = await supabaseClient.from('log_absensi').select('status_hadir').eq('username', nisn);
     let countS = 0, countI = 0, countA = 0;
     if(absenDb) {
@@ -4659,7 +4693,7 @@ async function cetakRaporPDF(nisn, namaSiswa) {
         });
     }
 
-    // 8. Susun HTML Cetak (Menyerupai Referensi Anda)
+    // 9. Susun HTML Cetak
     let tglBagi = tahunAktifRaporCache.tanggal_rapor ? new Date(tahunAktifRaporCache.tanggal_rapor).toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'}) : '-';
     let ttdWali = currentUser.nama_lengkap || currentUser.nama || 'Wali Kelas';
     let ttdKepsek = tahunAktifRaporCache.nama_kepsek || 'H. Furqon, M.Pd., M.M';
@@ -4674,7 +4708,7 @@ async function cetakRaporPDF(nisn, namaSiswa) {
         <style>
             body { font-family: 'Times New Roman', Times, serif; font-size: 12px; color: black; margin: 0; padding: 20px; }
             .border-black { border: 1px solid black; }
-            .table-rapor { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .table-rapor { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
             .table-rapor th, .table-rapor td { padding: 6px; }
             .header-text { text-align: center; margin-bottom: 30px; }
             .info-table { width: 100%; margin-bottom: 20px; font-weight: bold; }
@@ -4726,13 +4760,18 @@ async function cetakRaporPDF(nisn, namaSiswa) {
             </tbody>
         </table>
 
-        <!-- Page Break agar TTD / Absensi tidak terpotong jelek -->
+        <!-- Tempat menyisipkan PKL, Ekskul, dan Catatan (Hanya dirender jika ada isinya) -->
+        ${pklHTML}
+        ${ekskulHTML}
+        ${catatanHTML}
+
+        <!-- Page Break & Absensi -->
         <div style="page-break-inside: avoid;">
-            <table class="table-rapor border-black" style="width: 50%; float: left; margin-top: 20px;">
-                <tr><th colspan="3" class="border-black text-start">Ketidakhadiran: ${namaSiswa.toUpperCase()}</th></tr>
-                <tr><td class="border-black w-50">Sakit</td><td class="border-black text-center w-25">${countS}</td><td class="border-black text-center w-25">hari</td></tr>
-                <tr><td class="border-black">Izin</td><td class="border-black text-center">${countI}</td><td class="border-black text-center">hari</td></tr>
-                <tr><td class="border-black">Tanpa Keterangan</td><td class="border-black text-center">${countA}</td><td class="border-black text-center">hari</td></tr>
+            <table class="table-rapor border-black" style="width: 50%; float: left; margin-top: 10px;">
+                <tr><th colspan="3" class="border-black text-start ps-2">Ketidakhadiran: ${namaSiswa.toUpperCase()}</th></tr>
+                <tr><td class="border-black w-50 ps-2">Sakit</td><td class="border-black text-center w-25">${countS}</td><td class="border-black text-center w-25">hari</td></tr>
+                <tr><td class="border-black ps-2">Izin</td><td class="border-black text-center">${countI}</td><td class="border-black text-center">hari</td></tr>
+                <tr><td class="border-black ps-2">Tanpa Keterangan</td><td class="border-black text-center">${countA}</td><td class="border-black text-center">hari</td></tr>
             </table>
 
             <div style="clear:both;"></div>
@@ -4753,12 +4792,8 @@ async function cetakRaporPDF(nisn, namaSiswa) {
     </body>
     </html>`;
 
-    // 9. Buka Tab Baru dan Eksekusi Cetak!
     let win = window.open('', '_blank');
     win.document.write(htmlCetak);
     win.document.close();
-    win.setTimeout(() => { 
-        win.print(); 
-        // win.close(); // Hapus komentar ini jika ingin tab otomatis menutup setelah diprint
-    }, 800);
+    win.setTimeout(() => { win.print(); }, 800);
 }
