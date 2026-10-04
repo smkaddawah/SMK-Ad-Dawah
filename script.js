@@ -155,22 +155,30 @@ function generateFormLaporanHTML() {
   return function(idSuffix) {
     return `
       <form onsubmit="kirimLaporan(event, '${idSuffix}')">
+        <!-- Dummy select disembunyikan agar tidak error -->
+        <select id="selectKelas_${idSuffix}" style="display:none;"></select>
+
         <div class="mb-3">
-          <label class="form-label fw-bold text-primary-green">1. Pilih Kelas</label>
-          <select class="form-select rounded-3" id="selectKelas_${idSuffix}" onchange="filterSiswaByKelas('${idSuffix}')" required>
-            <option value="">-- Pilih Kelas --</option>
-          </select>
+          <label class="form-label fw-bold text-primary-green">1. Pilih Kelas (Bisa Centang Banyak)</label>
+          <div class="border rounded-3 p-3 bg-light shadow-sm" style="max-height: 150px; overflow-y: auto;" id="wadahKelasLapor_${idSuffix}">
+            <div class="text-center py-2 text-muted small"><i class="fa-solid fa-spinner fa-spin text-success me-2"></i> Memuat data kelas...</div>
+          </div>
         </div>
+        
         <div class="mb-3">
-          <label class="form-label fw-bold text-primary-green">2. Nama Siswa</label>
-          <select class="form-select rounded-3" id="selectSiswa_${idSuffix}" onchange="aktifkanKategori('${idSuffix}')" disabled required>
-            <option value="">-- Pilih Siswa (Harus isi Kelas dahulu) --</option>
-          </select>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label fw-bold text-primary-green m-0">2. Nama Siswa</label>
+            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2 fw-bold shadow-sm" style="font-size:0.75rem;" onclick="selectAllSiswaLapor('${idSuffix}')">Pilih Semua</button>
+          </div>
+          <div class="border rounded-3 p-2 bg-white shadow-sm" style="max-height: 280px; overflow-y: auto;" id="wadahSiswaLapor_${idSuffix}">
+            <div class="text-muted small text-center py-3">-- Centang Kelas Terlebih Dahulu --</div>
+          </div>
         </div>
+
         <div class="mb-3">
           <label class="form-label fw-bold text-primary-green">3. Kategori Pelanggaran</label>
           <select class="form-select rounded-3" id="selectKategori_${idSuffix}" onchange="filterPelanggaranByKategori('${idSuffix}')" disabled required>
-            <option value="">-- Pilih Kategori (Harus isi Nama Siswa dahulu) --</option>
+            <option value="">-- Pilih Kategori (Harus centang Nama Siswa dahulu) --</option>
           </select>
         </div>
         <div class="mb-3">
@@ -186,7 +194,7 @@ function generateFormLaporanHTML() {
           </div>
           <div class="col-8">
             <label class="form-label fw-bold text-primary-green">5b. Sanksi Otomatis</label>
-            <input type="text" class="form-control rounded-3 bg-light fw-bold text-dark" id="sanksiLapor_${idSuffix}" placeholder="Sanksi akan muncul otomatis..." readonly>
+            <input type="text" class="form-control rounded-3 bg-light fw-bold text-dark" id="sanksiLapor_${idSuffix}" placeholder="Sanksi otomatis..." readonly>
           </div>
         </div>
         <div class="mb-3">
@@ -217,6 +225,24 @@ function generateFormLaporanHTML() {
       </form>
     `;
   };
+}
+
+function renderCheckboxKelasDinamic(idSuffix) {
+  const wadahKelas = document.getElementById(`wadahKelasLapor_${idSuffix}`);
+  if (!wadahKelas) return; // Jika form belum di-render di HTML, lewati
+  
+  if (typeof dataMaster !== 'undefined' && dataMaster.siswa && dataMaster.siswa.length > 0) {
+    const kelasUnik = [...new Set(dataMaster.siswa.map(s => s.kelas))].sort();
+    
+    wadahKelas.innerHTML = kelasUnik.map((kls, idx) => `
+      <div class="form-check form-check-inline mb-2">
+        <input class="form-check-input cb-kelas-lapor-${idSuffix}" type="checkbox" value="${kls}" id="cbKelas_${idSuffix}_${idx}" onchange="filterSiswaByKelas('${idSuffix}')" style="transform: scale(1.2);">
+        <label class="form-check-label fw-bold text-dark ms-1" for="cbKelas_${idSuffix}_${idx}">${kls}</label>
+      </div>
+    `).join('');
+  } else {
+    wadahKelas.innerHTML = '<div class="text-danger small fw-bold">Gagal memuat kelas. Database siswa masih kosong.</div>';
+  }
 }
 
 function prosesFotoInput(inputEl, idSuffix) {
@@ -565,6 +591,12 @@ async function loadFormDataMaster() {
   const res = await panggilAPI({ aksi: "get_form_data" });
   if (res.status === "sukses") {
     dataMaster = res;
+    
+    // 👇 INI 2 BARIS BARU YANG DIMASUKKAN 👇
+    renderCheckboxKelasDinamic('Guru');
+    renderCheckboxKelasDinamic('Admin');
+
+    // (Opsional) Tetap update dummy select jika ada script lain yang butuh
     ["Guru", "Admin"].forEach(suf => {
       const selKelas = document.getElementById(`selectKelas_${suf}`);
       if (selKelas) {
@@ -575,38 +607,94 @@ async function loadFormDataMaster() {
 }
 
 function filterSiswaByKelas(idSuffix) {
-  const kelasDipilih = document.getElementById(`selectKelas_${idSuffix}`).value;
-  const selectSiswa = document.getElementById(`selectSiswa_${idSuffix}`);
+  // 1. Tangkap semua kelas yang dicentang
+  const checkedKelasNodes = document.querySelectorAll(`.cb-kelas-lapor-${idSuffix}:checked`);
+  const checkedKelas = Array.from(checkedKelasNodes).map(cb => cb.value);
+  
+  const wadahSiswa = document.getElementById(`wadahSiswaLapor_${idSuffix}`);
   const selectKategori = document.getElementById(`selectKategori_${idSuffix}`);
   const selectKamus = document.getElementById(`selectKamus_${idSuffix}`);
   const poinLapor = document.getElementById(`poinLapor_${idSuffix}`);
   const sanksiLapor = document.getElementById(`sanksiLapor_${idSuffix}`);
   
-  selectSiswa.innerHTML = '<option value="">-- Pilih Siswa --</option>'; selectSiswa.disabled = true;
-  selectKategori.innerHTML = '<option value="">-- Pilih Kategori (Harus isi Nama Siswa dahulu) --</option>'; selectKategori.disabled = true;
+  // 2. Jika guru un-check semua kelas, bersihkan daftar siswa
+  if (checkedKelas.length === 0) {
+      wadahSiswa.innerHTML = '<div class="text-muted small text-center py-3">-- Centang Kelas Terlebih Dahulu --</div>';
+      selectKategori.innerHTML = '<option value="">-- Pilih Kategori (Harus centang Nama Siswa dahulu) --</option>'; selectKategori.disabled = true;
+      selectKamus.innerHTML = '<option value="">-- Pilih Jenis Pelanggaran (Harus isi Kategori dahulu) --</option>'; selectKamus.disabled = true;
+      poinLapor.value = ""; if (sanksiLapor) sanksiLapor.value = "";
+      return;
+  }
+  
+  let htmlSiswa = "";
+  
+  // 3. Looping kelas yang dipilih untuk membuat daftar ber-Kelompok / memiliki Pembatas
+  checkedKelas.forEach(kelas => {
+      const siswaDiKelas = dataMaster.siswa.filter(s => s.kelas === kelas);
+      
+      if(siswaDiKelas.length > 0) {
+          // Buat Pembatas / Header untuk Kelas ini
+          htmlSiswa += `
+              <div class="bg-success text-white fw-bold px-2 py-2 mt-2 mb-1 rounded-2 shadow-sm d-flex justify-content-between align-items-center">
+                  <span><i class="fa-solid fa-users me-2"></i> KELAS ${kelas}</span>
+                  <span class="badge bg-light text-success">${siswaDiKelas.length} Siswa</span>
+              </div>
+          `;
+          
+          // Render Checkbox Siswa di bawah Pembatas Kelas tersebut
+          siswaDiKelas.forEach((s) => {
+              htmlSiswa += `
+              <div class="form-check border-bottom py-2 ms-2">
+                  <input class="form-check-input cb-siswa-lapor-${idSuffix}" type="checkbox" value="${s.nisn}" id="cbSiswa_${idSuffix}_${s.nisn}" onchange="aktifkanKategori('${idSuffix}')" style="transform: scale(1.2); margin-top: 5px;">
+                  <label class="form-check-label text-dark w-100 ms-2" for="cbSiswa_${idSuffix}_${s.nisn}">
+                      <b class="fs-6">${s.nama}</b> <br><small class="text-muted">NISN: ${s.nisn}</small>
+                  </label>
+              </div>
+              `;
+          });
+      }
+  });
+  
+  // Tampilkan ke HTML
+  wadahSiswa.innerHTML = htmlSiswa;
+  
+  // 4. Reset pilihan kategori (agar user dipaksa pilih ulang kategori tiap kali ganti kelas)
+  selectKategori.innerHTML = '<option value="">-- Pilih Kategori (Harus centang Nama Siswa dahulu) --</option>'; selectKategori.disabled = true;
   selectKamus.innerHTML = '<option value="">-- Pilih Jenis Pelanggaran (Harus isi Kategori dahulu) --</option>'; selectKamus.disabled = true;
   poinLapor.value = ""; if (sanksiLapor) sanksiLapor.value = "";
-  
-  if (!kelasDipilih) return;
-  
-  const siswaTerfilter = dataMaster.siswa.filter(s => s.kelas === kelasDipilih);
-  selectSiswa.innerHTML = '<option value="">-- Pilih Siswa --</option>' + 
-    siswaTerfilter.map(s => `<option value="${s.nisn}">${s.nisn} - ${s.nama}</option>`).join("");
-  selectSiswa.disabled = false;
+}
+
+function selectAllSiswaLapor(idSuffix) {
+    const checkboxes = document.querySelectorAll(`.cb-siswa-lapor-${idSuffix}`);
+    if(checkboxes.length === 0) return;
+    
+    // Logika Pintar: Cek jika semua sudah terceklis, maka hapus centang semua. Jika belum, centang semua.
+    const isAllChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !isAllChecked);
+    
+    // Panggil logika aktifkan kategori setelah centang
+    aktifkanKategori(idSuffix);
 }
 
 function aktifkanKategori(idSuffix) {
-  const nisnDipilih = document.getElementById(`selectSiswa_${idSuffix}`).value;
+  // 1. Cari semua checkbox siswa yang sedang di-centang
+  const checkedSiswa = document.querySelectorAll(`.cb-siswa-lapor-${idSuffix}:checked`);
+  
   const selectKategori = document.getElementById(`selectKategori_${idSuffix}`);
   const selectKamus = document.getElementById(`selectKamus_${idSuffix}`);
   const poinLapor = document.getElementById(`poinLapor_${idSuffix}`);
   const sanksiLapor = document.getElementById(`sanksiLapor_${idSuffix}`);
   
-  selectKategori.innerHTML = '<option value="">-- Pilih Kategori --</option>'; selectKategori.disabled = true;
-  selectKamus.innerHTML = '<option value="">-- Pilih Jenis Pelanggaran (Harus isi Kategori dahulu) --</option>'; selectKamus.disabled = true;
-  poinLapor.value = ""; if (sanksiLapor) sanksiLapor.value = "";
+  // 2. Jika tidak ada siswa yang dicentang, matikan kembali form kategori
+  if (checkedSiswa.length === 0) {
+      selectKategori.innerHTML = '<option value="">-- Pilih Kategori (Harus centang Nama Siswa dahulu) --</option>'; selectKategori.disabled = true;
+      selectKamus.innerHTML = '<option value="">-- Pilih Jenis Pelanggaran (Harus isi Kategori dahulu) --</option>'; selectKamus.disabled = true;
+      poinLapor.value = ""; if (sanksiLapor) sanksiLapor.value = "";
+      return;
+  }
   
-  if (!nisnDipilih) return;
+  // 3. Jika sudah aktif, jangan render ulang agar pilihan user tidak ter-reset saat mencentang siswa tambahan
+  if (!selectKategori.disabled) return; 
   
   const kategoriUnik = [];
   const mapNamaKategori = {
@@ -663,31 +751,42 @@ function updateDetailPelanggaranOtomatis(idSuffix) {
 // ================= 4. KIRIM LAPORAN =================
 async function kirimLaporan(e, idSuffix) {
   e.preventDefault();
-  const btn = document.getElementById(`btnLapor_${idSuffix}`);
-  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Mengirim Laporan...';
   
-  const nisn = document.getElementById(`selectSiswa_${idSuffix}`).value;
+  // 1. Kumpulkan semua NISN siswa yang di-centang dari Checkbox
+  const checkedSiswaNodes = document.querySelectorAll(`.cb-siswa-lapor-${idSuffix}:checked`);
+  const arrNisn = Array.from(checkedSiswaNodes).map(cb => cb.value);
+  
   const kode = document.getElementById(`selectKamus_${idSuffix}`).value;
   const keterangan = document.getElementById(`ket_${idSuffix}`).value;
   const bukti = document.getElementById(`valBukti_${idSuffix}`).value || "Tidak ada bukti foto";
   
-  if (!nisn || !kode) {
-    showAlertBS("Perhatian!", "Pilih data dengan benar!", "warning");
-    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>KIRIM LAPORAN'; 
+  // 2. Validasi pencegahan error
+  if (arrNisn.length === 0 || !kode) {
+    showAlertBS("Perhatian!", "Centang minimal 1 Nama Siswa dan pilih Jenis Pelanggaran!", "warning");
     return;
   }
 
-  const res = await panggilAPI({ aksi: "lapor", nisn, kode, keterangan, bukti, pelapor: currentUser.nama });
+  const btn = document.getElementById(`btnLapor_${idSuffix}`);
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Mengirim Laporan...';
+  
+  // 3. Kirim data berupa Array 'arrNisn' ke API
+  const res = await panggilAPI({ aksi: "lapor", arrNisn: arrNisn, kode, keterangan, bukti, pelapor: currentUser.nama });
+  
   if (res.status === "sukses") {
-    showAlertBS("Berhasil Terkirim!", "Laporan berhasil masuk antrean verifikasi.", "success");
+    showAlertBS("Berhasil Terkirim!", `${arrNisn.length} Laporan berhasil masuk antrean verifikasi.`, "success");
     e.target.reset();
     document.getElementById(`preview_${idSuffix}`).style.display = "none";
-    document.getElementById(`selectSiswa_${idSuffix}`).disabled = true;
+    
+    // 4. Reset Form kembali bersih
+    document.querySelectorAll(`.cb-kelas-lapor-${idSuffix}`).forEach(cb => cb.checked = false);
+    document.getElementById(`wadahSiswaLapor_${idSuffix}`).innerHTML = '<div class="text-muted small text-center py-3">-- Centang Kelas Terlebih Dahulu --</div>';
     document.getElementById(`selectKategori_${idSuffix}`).disabled = true;
     document.getElementById(`selectKamus_${idSuffix}`).disabled = true;
     document.getElementById(`poinLapor_${idSuffix}`).value = "";
     if (document.getElementById(`sanksiLapor_${idSuffix}`)) document.getElementById(`sanksiLapor_${idSuffix}`).value = "";
-  } else { showAlertBS("Gagal Mengirim", res.pesan, "error"); }
+  } else { 
+    showAlertBS("Gagal Mengirim", res.pesan, "error"); 
+  }
   
   btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>KIRIM LAPORAN';
 }
@@ -1631,48 +1730,59 @@ async function panggilAPI(payload) {
     }
 
     if (aksi === "lapor") {
-      const idLog = "LOG-" + new Date().getTime();
-      const tgl = new Date().toISOString();
       const { data: kamusItem } = await supabaseClient.from('kamus_pelanggaran').select('bobot').eq('kode', payload.kode).single();
       const poin = kamusItem ? kamusItem.bobot : 0;
       
       let urlBukti = "Tidak ada bukti foto";
 
-      // === 1. TAMBAHAN UNTUK UPLOAD FOTO KE STORAGE ===
       if (payload.bukti && payload.bukti.startsWith('data:image')) {
         try {
-          // Ubah string Base64 dari HTML menjadi file Blob
           const resGambar = await fetch(payload.bukti);
           const blob = await resGambar.blob();
           
-          // Buat nama file unik (contoh: bukti_12345_1784116347.jpg)
-          const namaFile = `bukti_${payload.nisn}_${new Date().getTime()}.jpg`;
+          // Menggunakan timestamp saja karena 1 foto dipakai bersama-sama
+          const namaFile = `bukti_multi_${new Date().getTime()}.jpg`;
           
-          // Upload ke Supabase Storage (Bucket: tempat-naro-foto)
           const { error: uploadError } = await supabaseClient.storage
             .from('tempat-naro-foto')
             .upload(namaFile, blob, { contentType: 'image/jpeg' });
             
           if (uploadError) throw uploadError;
-          
-          // Ambil link URL publiknya
           const { data: urlData } = supabaseClient.storage.from('tempat-naro-foto').getPublicUrl(namaFile);
           urlBukti = urlData.publicUrl;
-          
         } catch (err) {
           return { status: "gagal", pesan: "Upload foto gagal: " + err.message };
         }
       }
-      // ==================================================
 
-      // === 2. UBAH BAGIAN INSERT INI ===
-      const { error } = await supabaseClient.from('log_pelanggaran').insert([{
-        id_log: idLog, tanggal: tgl, nisn: payload.nisn, kode_pelanggaran: payload.kode, keterangan: payload.keterangan,
-        bukti_link: urlBukti, // <--- Gunakan variabel urlBukti yang baru
-        pelapor: payload.pelapor, status: "Pending", tahun_ajaran: new Date().getFullYear() + "/" + (new Date().getFullYear() + 1), poin: poin
-      }]);
+      const tahunAjaran = new Date().getFullYear() + "/" + (new Date().getFullYear() + 1);
+      const tgl = new Date().toISOString();
+      const timestampMs = new Date().getTime();
       
-      if (error) return { status: "gagal", pesan: error.message }; return { status: "sukses" };
+      // Ambil Array NISN dari form baru, tapi tetap dukung form lama/anonim jika hanya 1 nisn
+      let listNisn = payload.arrNisn ? payload.arrNisn : [payload.nisn];
+      
+      // Susun Data Jamak (Array of Objects)
+      let dataInsert = listNisn.map((n, index) => {
+          return {
+            id_log: "LOG-" + timestampMs + "-" + index,  // ID Unik agar tidak bentrok
+            tanggal: tgl, 
+            nisn: n, 
+            kode_pelanggaran: payload.kode, 
+            keterangan: payload.keterangan,
+            bukti_link: urlBukti, 
+            pelapor: payload.pelapor, 
+            status: "Pending", 
+            tahun_ajaran: tahunAjaran, 
+            poin: poin
+          };
+      });
+
+      // Tembakkan seluruh array ke Supabase dalam 1 kali eksekusi (Bulk Insert - Super Cepat)
+      const { error } = await supabaseClient.from('log_pelanggaran').insert(dataInsert);
+      
+      if (error) return { status: "gagal", pesan: error.message }; 
+      return { status: "sukses" };
     }
 
     if (aksi === "upload_foto_profil") {
@@ -4905,7 +5015,7 @@ async function cetakRaporPDF(nisn, namaSiswa) {
     <body>
         <!-- HALAMAN 1 & 2 (NILAI RAPOR) -->
         <div class="header-text">
-            <h3 style="margin:0;">LAPORAN HASIL BELAJAR AKHIR SEMESTER ${tahunAktifRaporCache.semester.toUpperCase()}</h3>
+            <h3 style="margin:0;">LAPORAN HASIL BELAJAR ${tahunAktifRaporCache.semester.toUpperCase()}</h3>
             <h3 style="margin:0;">(RAPOR)</h3>
         </div>
 
@@ -4978,6 +5088,203 @@ async function cetakRaporPDF(nisn, namaSiswa) {
 
     let win = window.open('', '_blank');
     win.document.write(htmlCetak);
+    win.document.close();
+    win.setTimeout(() => { win.print(); }, 1500);
+}
+
+// =================================================================================
+// ENGINE CETAK LEDGER (REKAP NILAI, ABSENSI, & PERINGKAT KELAS)
+// =================================================================================
+
+async function cetakLedgerKelas() {
+    showAlertBS("Memproses Ledger", "Sedang menghitung nilai dan peringkat seluruh siswa di kelas... Silakan tunggu.", "info");
+
+    const kls = currentUser.kelas;
+    
+    // 1. Ambil Pengaturan Kelas (Untuk filter tanggal absen)
+    const { data: setWali } = await supabaseClient.from('pengaturan_kelas').select('*').eq('id_tahun', tahunAktifRaporCache.id).eq('kelas', kls).maybeSingle();
+
+    // 2. Ambil Data Seluruh Siswa di Kelas Ini
+    const { data: siswaDb } = await supabaseClient.from('users').select('username, nama_lengkap').eq('role', 'siswa').eq('kelas', kls);
+    if(!siswaDb || siswaDb.length === 0) return showAlertBS("Kosong", "Tidak ada siswa di kelas ini.", "warning");
+
+    // 3. Ambil Mode Perhitungan & Mata Pelajaran Kelas
+    let modeKalkulasi = tahunAktifRaporCache.mode_kalkulasi || 'RATA_RATA';
+    const { data: kompDb } = await supabaseClient.from('komponen_nilai').select('*');
+    let mapBobot = {};
+    if(kompDb) kompDb.forEach(k => { mapBobot[k.id] = (k.bobot_persen / 100); });
+    
+    const { data: mapelDb } = await supabaseClient.from('mapel_guru').select('*, tugas_guru(id, id_komponen)').eq('kelas', kls).eq('id_tahun', tahunAktifRaporCache.id).order('kategori_mapel');
+    
+    // Filter hanya mapel yang dimasukkan ke dalam kelompok (yang aktif)
+    let validMapel = [];
+    if(mapelDb) validMapel = mapelDb.filter(m => m.kategori_mapel && m.kategori_mapel.trim() !== '' && m.kategori_mapel !== 'null');
+
+    // 4. Ambil Nilai Seluruh Siswa Secara Massal (Jauh lebih cepat)
+    const nisnList = siswaDb.map(s => s.username);
+    const { data: nilaiDb } = await supabaseClient.from('nilai_siswa').select('*').in('nisn', nisnList);
+    let mapNilai = {}; // nisn -> id_tugas -> nilai
+    if(nilaiDb) {
+        nilaiDb.forEach(n => {
+            if(!mapNilai[n.nisn]) mapNilai[n.nisn] = {};
+            mapNilai[n.nisn][n.id_tugas] = n.nilai;
+        });
+    }
+
+    // 5. Ambil Absensi Seluruh Siswa Berdasarkan Tanggal Wali Kelas
+    let queryAbsen = supabaseClient.from('log_absensi').select('username, keterangan').in('username', nisnList);
+    if (setWali && setWali.tgl_absen_mulai) queryAbsen = queryAbsen.gte('tanggal', setWali.tgl_absen_mulai);
+    if (setWali && setWali.tgl_absen_akhir) queryAbsen = queryAbsen.lte('tanggal', setWali.tgl_absen_akhir);
+    const { data: absenDb } = await queryAbsen;
+
+    let mapAbsen = {}; 
+    siswaDb.forEach(s => mapAbsen[s.username] = {S:0, I:0, A:0});
+    if(absenDb) {
+        absenDb.forEach(ab => {
+            let ket = (ab.keterangan || '').toUpperCase();
+            let u = ab.username;
+            if(ket === 'S' || ket === 'SAKIT') mapAbsen[u].S++;
+            else if(ket === 'I' || ket === 'IZIN') mapAbsen[u].I++;
+            else if(ket === 'A' || ket === 'ALPA' || ket === 'TANPA KETERANGAN') mapAbsen[u].A++;
+        });
+    }
+
+    // 6. Kalkulasi Nilai Akhir Per Siswa
+    let ledgerData = [];
+    siswaDb.forEach(s => {
+        let row = { 
+            nisn: s.username, 
+            nama: s.nama_lengkap, 
+            nilaiMapel: {}, 
+            totalNilai: 0, 
+            S: mapAbsen[s.username].S, 
+            I: mapAbsen[s.username].I, 
+            A: mapAbsen[s.username].A 
+        };
+        
+        validMapel.forEach(m => {
+            let hitungKomp = {};
+            if(m.tugas_guru) {
+                m.tugas_guru.forEach(t => {
+                    if(mapNilai[s.username] && mapNilai[s.username][t.id] !== undefined) {
+                        if(!hitungKomp[t.id_komponen]) hitungKomp[t.id_komponen] = { total: 0, count: 0 };
+                        hitungKomp[t.id_komponen].total += mapNilai[s.username][t.id];
+                        hitungKomp[t.id_komponen].count += 1;
+                    }
+                });
+            }
+            
+            let na = 0;
+            if(modeKalkulasi === 'PERSENTASE') {
+                for(let idKomp in hitungKomp) {
+                    let rata2 = hitungKomp[idKomp].total / hitungKomp[idKomp].count;
+                    na += (rata2 * (mapBobot[idKomp] || 0));
+                }
+            } else {
+                let t = 0, c = 0;
+                for(let idKomp in hitungKomp) { t += hitungKomp[idKomp].total; c += hitungKomp[idKomp].count; }
+                if(c > 0) na = t / c;
+            }
+            na = Math.round(na);
+            row.nilaiMapel[m.id] = na;
+            row.totalNilai += na; // Tambahkan ke jumlah nilai
+        });
+        ledgerData.push(row);
+    });
+
+    // 7. Urutkan Berdasarkan Total Nilai (Menentukan Peringkat)
+    ledgerData.sort((a, b) => b.totalNilai - a.totalNilai);
+    ledgerData.forEach((row, index) => { row.peringkat = index + 1; });
+
+    // 8. Urutkan Kembali Berdasarkan Abjad Nama (Standar Tampilan Ledger)
+    ledgerData.sort((a, b) => a.nama.localeCompare(b.nama));
+
+    // 9. Susun HTML Print (Mapel Horizontal, Siswa Vertikal)
+    let thMapel = validMapel.map(m => `<th class="rotate-text">${m.nama_mapel}</th>`).join('');
+    
+    let tbody = ledgerData.map((row, i) => {
+        let tdMapel = validMapel.map(m => `<td class="text-center">${row.nilaiMapel[m.id] || 0}</td>`).join('');
+        return `<tr>
+            <td class="text-center">${i+1}</td>
+            <td class="text-center">${row.nisn}</td>
+            <td class="ps-2 fw-bold">${row.nama}</td>
+            ${tdMapel}
+            <td class="text-center fw-bold bg-light">${row.totalNilai}</td>
+            <td class="text-center">${row.S}</td>
+            <td class="text-center">${row.I}</td>
+            <td class="text-center">${row.A}</td>
+            <td class="text-center fw-bold text-danger" style="font-size:13px;">${row.peringkat}</td>
+        </tr>`;
+    }).join('');
+
+    let tglCetak = (setWali && setWali.tanggal_rapor) ? new Date(setWali.tanggal_rapor).toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'}) : '-';
+    let ttdWali = currentUser.nama_lengkap || currentUser.nama || 'Wali Kelas';
+
+    let html = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <title>Ledger_${kls}_${tahunAktifRaporCache.semester}</title>
+        <style>
+            body { font-family: 'Helvetica', Arial, sans-serif; font-size: 11px; margin: 0; padding: 15px; color: black; }
+            h2, h4 { margin: 3px 0; text-align: center; }
+            .table-ledger { border-collapse: collapse; width: 100%; margin-top: 15px; }
+            .table-ledger th, .table-ledger td { border: 1px solid black; padding: 4px; }
+            .text-center { text-align: center; }
+            .ps-2 { padding-left: 8px; }
+            .fw-bold { font-weight: bold; }
+            .text-danger { color: #d32f2f; }
+            .bg-light { background-color: #f8f9fa; }
+            /* Memutar teks header mapel 90 derajat agar tabel tidak kepanjangan */
+            .rotate-text {
+                writing-mode: vertical-rl;
+                transform: rotate(180deg);
+                white-space: nowrap;
+                padding: 10px 5px !important;
+                height: 140px;
+                text-align: left;
+            }
+            .ttd-box { width: 300px; float: right; margin-top: 20px; text-align: center; font-size: 12px; }
+            @media print {
+                @page { size: A4 landscape; margin: 10mm; }
+                body { padding: 0; }
+            }
+        </style>
+    </head>
+    <body>
+        <h2>LEDGER NILAI KELAS ${kls}</h2>
+        <h4>${tahunAktifRaporCache.semester.toUpperCase()} - TAHUN PELAJARAN ${tahunAktifRaporCache.tahun}</h4>
+        
+        <table class="table-ledger">
+            <thead style="background-color: #e9ecef;">
+                <tr>
+                    <th class="text-center" style="width:2%;">No</th>
+                    <th class="text-center" style="width:7%;">NISN</th>
+                    <th class="text-center" style="width:15%;">Nama Siswa</th>
+                    ${thMapel}
+                    <th class="text-center">Total<br>Nilai</th>
+                    <th class="text-center">S</th>
+                    <th class="text-center">I</th>
+                    <th class="text-center">A</th>
+                    <th class="text-center">Rank</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tbody}
+            </tbody>
+        </table>
+
+        <div class="ttd-box">
+            Jakarta, ${tglCetak}<br>Wali Kelas ${kls}<br><br><br><br><br>
+            <b><u>${ttdWali}</u></b>
+        </div>
+    </body>
+    </html>
+    `;
+
+    let win = window.open('', '_blank');
+    win.document.write(html);
     win.document.close();
     win.setTimeout(() => { win.print(); }, 1500);
 }

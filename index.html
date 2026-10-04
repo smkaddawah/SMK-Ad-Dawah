@@ -517,10 +517,15 @@
                         <h5 class="fw-bold mb-0"><i class="fa-solid fa-file-pdf me-2"></i>E-Raport Siswa</h5>
                         <small class="text-white-50" id="lblKelasEraportWali">Kelas: Memuat...</small>
                     </div>
-                    <!-- TOMBOL BARU PENGATURAN CETAK -->
-                    <button class="btn btn-light btn-sm fw-bold text-success shadow-sm" onclick="bukaModalPengaturanCetak()">
-                        <i class="fa-solid fa-cogs me-1"></i> Pengaturan Cetak
-                    </button>
+                    <!-- KUMPULAN TOMBOL CETAK -->
+                    <div>
+                        <button class="btn btn-warning btn-sm fw-bold shadow-sm text-dark me-2" onclick="cetakLedgerKelas()">
+                            <i class="fa-solid fa-table-list me-1"></i> Cetak Ledger
+                        </button>
+                        <button class="btn btn-light btn-sm fw-bold text-success shadow-sm" onclick="bukaModalPengaturanCetak()">
+                            <i class="fa-solid fa-cogs me-1"></i> Pengaturan Cetak
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-3">
                     <div class="alert alert-info border-0 shadow-sm small fw-bold">
@@ -1013,9 +1018,11 @@
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label fw-bold">Semester</label>
-                                <select class="form-select" id="formTahunSemester">
-                                    <option value="Ganjil">Ganjil</option>
-                                    <option value="Genap">Genap</option>
+                                <select class="form-select" id="formTahunSemester" required>
+                                    <option value="ASTS Ganjil">ASTS (Ganjil)</option>
+                                     <option value="ASAS Ganjil">ASAS (Ganjil)</option>
+                                  <option value="ASTS Genap">ASTS (Genap)</option>
+                                    <option value="ASAS Genap">ASAS (Genap)</option>
                                 </select>
                             </div>
                         </div>
