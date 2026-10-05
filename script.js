@@ -873,7 +873,7 @@ async function verifikasi(idLog, keputusan, isUnknown = false) {
                 const { data: uData } = await supabaseClient.from('users').select('kelas').eq('username', nisn).maybeSingle();
                 if (uData && uData.kelas) {
                     const { data: wData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', uData.kelas).maybeSingle();
-                    if (wData) tembakNotifikasi(wData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${nisn}) divalidasi Admin mendapat +${logLama.poin} Poin.`);
+                    if (wData) tembakNotifikasi(wData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${nama_lengkap}) divalidasi Admin mendapat +${logLama.poin} Poin.`);
                 }
             }
             loadPending(); 
