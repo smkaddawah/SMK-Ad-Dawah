@@ -460,10 +460,28 @@ function aktifkanTampilanUser(res) {
         if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
         if(typeof initWaliKelas === 'function') initWaliKelas(res.kelas); 
     }
+    // 👇 Panggil saat user sukses masuk ke aplikasi
+    daftarNotifikasiHP();
 }
 
 function logout() {
-  showConfirmBS("Apakah Anda yakin ingin keluar dari sistem?", () => {
+  showConfirmBS("Apakah Anda yakin ingin keluar dari sistem?", async () => {
+    
+    // --- TAMBAHAN KEAMANAN: Cabut izin HP saat user keluar ---
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) {
+                // Hapus alamat HP ini dari Supabase
+                await supabaseClient.from('push_subscriptions').delete().eq('subscription_json->>endpoint', sub.endpoint);
+                // Putus koneksi notifikasi dari browser
+                await sub.unsubscribe();
+            }
+        } catch(e) { console.error("Gagal cabut notifikasi:", e); }
+    }
+    // --------------------------------------------------------
+
     localStorage.removeItem("sesi_addawah");
     location.reload();
   });
@@ -773,7 +791,8 @@ async function kirimLaporan(e, idSuffix) {
   const res = await panggilAPI({ aksi: "lapor", arrNisn: arrNisn, kode, keterangan, bukti, pelapor: currentUser.nama });
   
   if (res.status === "sukses") {
-    showAlertBS("Berhasil Terkirim!", `${arrNisn.length} Laporan berhasil masuk antrean verifikasi.`, "success");
+      showAlertBS("Berhasil Terkirim!", `${arrNisn.length} Laporan berhasil masuk antrean verifikasi.`, "success");
+      tembakNotifikasi('admin', 'role', 'Laporan Baru Masuk!', `Ada ${arrNisn.length} antrean laporan pelanggaran baru yang butuh validasi Anda.`);
     e.target.reset();
     document.getElementById(`preview_${idSuffix}`).style.display = "none";
     
@@ -1057,6 +1076,7 @@ async function simpanLengkapLaporan(idLog) {
         if (error) throw error;
 
         showAlertBS("Berhasil", "Data laporan berhasil divalidasi dan disetujui!", "success");
+        tembakNotifikasi(nisnBaru, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran Anda divalidasi oleh Admin (+${poinBaru} Poin). Cek menu Riwayat Pelanggaran.`);
         
         // Tutup modal
         let modalEl = document.getElementById("modalEditLaporDynamic");
@@ -5458,5 +5478,86 @@ async function prosesImportMapelMassal() {
     } else {
         document.getElementById("teksImportMapel").value = "";
         showAlertBS("Berhasil", `Sukses! ${dataInsert.length} Mapel berhasil ditambahkan ke sistem.`, "success");
+    }
+}
+
+// ================= FITUR PUSH NOTIFICATION =================
+const publicVapidKey = 'BCokM_y1y4pHdv0xleSS4MZGUPCoXL8h43GnnbxpNsILslzWvTM5GJICt6uwCSk8GHz-hhL6lO44fOAnqSbTSSE';
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function daftarNotifikasiHP() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicVapidKey) // Pastikan publicVapidKey Anda tidak berubah
+            });
+        }
+
+        let currentUserTarget = currentUser.username || currentUser.identitas;
+        const endpointStr = subscription.endpoint;
+
+        // CEK KEAMANAN: Apakah alamat HP ini sudah pernah dipakai akun lain di database?
+        const { data: cekExist } = await supabaseClient
+            .from('push_subscriptions')
+            .select('id, username')
+            .eq('subscription_json->>endpoint', endpointStr)
+            .maybeSingle();
+
+        if (cekExist) {
+            if (cekExist.username !== currentUserTarget) {
+                // Jika HP dipakai akun beda, PINDAHKAN kepemilikan HP ini ke akun yang baru login!
+                await supabaseClient.from('push_subscriptions').update({ 
+                    username: currentUserTarget, role: currentUser.role 
+                }).eq('id', cekExist.id);
+            }
+        } else {
+            // HP benar-benar baru, simpan ke database
+            await supabaseClient.from('push_subscriptions').insert([{
+                username: currentUserTarget, role: currentUser.role, subscription_json: subscription
+            }]);
+        }
+    } catch (err) {
+        console.error('Gagal mendaftar notifikasi:', err);
+    }
+}
+
+// ================= FUNGSI PEMANGGIL EDGE FUNCTION =================
+async function tembakNotifikasi(target, jenisTarget, judul, pesan) {
+    try {
+        let payload = { title: judul, message: pesan, url: '/' };
+        
+        // Cek apakah targetnya Role (misal: 'admin') atau Username (misal: NISN Siswa)
+        if (jenisTarget === 'role') {
+            payload.target_role = target;
+        } else {
+            payload.target_username = target;
+        }
+
+        // Tembakkan ke Edge Function "kirim-notif" di Supabase
+        await supabaseClient.functions.invoke('kirim-notif', {
+            body: payload
+        });
+        
+    } catch(err) { 
+        console.error("Gagal menembak notif:", err); 
     }
 }
