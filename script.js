@@ -467,20 +467,17 @@ function aktifkanTampilanUser(res) {
 function logout() {
   showConfirmBS("Apakah Anda yakin ingin keluar dari sistem?", async () => {
     
-    // --- TAMBAHAN KEAMANAN: Cabut izin HP saat user keluar ---
+    // Cabut koneksi notifikasi akun ini dari browser dan database
     if ('serviceWorker' in navigator && 'PushManager' in window) {
         try {
             const reg = await navigator.serviceWorker.ready;
             const sub = await reg.pushManager.getSubscription();
             if (sub) {
-                // Hapus alamat HP ini dari Supabase
                 await supabaseClient.from('push_subscriptions').delete().eq('subscription_json->>endpoint', sub.endpoint);
-                // Putus koneksi notifikasi dari browser
-                await sub.unsubscribe();
+                await sub.unsubscribe(); 
             }
         } catch(e) { console.error("Gagal cabut notifikasi:", e); }
     }
-    // --------------------------------------------------------
 
     localStorage.removeItem("sesi_addawah");
     location.reload();
@@ -864,17 +861,15 @@ async function verifikasi(idLog, keputusan, isUnknown = false) {
             
             // 3. TEMBAK NOTIFIKASI JIKA DISETUJUI ADMIN
             if (keputusan === 'Disetujui' && logLama && logLama.nisn) {
-                const nisn = logLama.nisn;
-                
-                // A. Notifikasi ke HP Siswa
-                tembakNotifikasi(nisn, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran disetujui Admin (+${logLama.poin} Poin).`);
-                
-                // B. Notifikasi ke HP Wali Kelas (Cari otomatis berdasarkan kelas siswa)
-                const { data: uData } = await supabaseClient.from('users').select('kelas').eq('username', nisn).maybeSingle();
-                if (uData && uData.kelas) {
-                    const { data: wData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', uData.kelas).maybeSingle();
-                    if (wData) tembakNotifikasi(wData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${nama_lengkap}) divalidasi Admin mendapat +${logLama.poin} Poin.`);
-                }
+                setTimeout(async () => {
+                    const { data: uData } = await supabaseClient.from('users').select('nama, kelas').eq('username', logLama.nisn).maybeSingle();
+                    if (uData) {
+                        tembakNotifikasi(logLama.nisn, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran disetujui Admin (+${logLama.poin} Poin).`);
+                        
+                        const { data: wData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', uData.kelas).maybeSingle();
+                        if (wData) tembakNotifikasi(wData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${uData.nama}) divalidasi Admin mendapat +${logLama.poin} Poin.`);
+                    }
+                }, 100);
             }
             loadPending(); 
         }
@@ -1093,6 +1088,15 @@ async function simpanLengkapLaporan(idLog) {
         if (error) throw error;
 
         showAlertBS("Berhasil", "Data laporan berhasil divalidasi dan disetujui!", "success");
+        setTimeout(async () => {
+            const { data: uData } = await supabaseClient.from('users').select('nama, kelas').eq('username', nisnBaru).maybeSingle();
+            if (uData) {
+                tembakNotifikasi(nisnBaru, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran Anda divalidasi oleh Admin (+${poinBaru} Poin).`);
+                
+                const { data: wData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', uData.kelas).maybeSingle();
+                if (wData) tembakNotifikasi(wData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${uData.nama}) divalidasi Admin mendapat +${poinBaru} Poin.`);
+            }
+        }, 100);
         
         // 👇 TEMBAK NOTIFIKASI KE HP SISWA 👇
         tembakNotifikasi(nisnBaru, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran Anda divalidasi oleh Admin (+${poinBaru} Poin).`);
@@ -1824,10 +1828,16 @@ async function panggilAPI(payload) {
       });
 
       // Tembakkan seluruh array ke Supabase dalam 1 kali eksekusi (Bulk Insert - Super Cepat)
+      // (Di dalam panggilAPI -> aksi lapor)
       const { error } = await supabaseClient.from('log_pelanggaran').insert(dataInsert);
       
       if (error) return { status: "gagal", pesan: error.message }; 
+
+      // Tembak notif instan ke Admin tanpa menunggu proses UI
+      tembakNotifikasi('admin', 'role', 'Laporan Baru Masuk!', `Ada ${dataInsert.length} laporan pelanggaran baru yang butuh validasi Anda.`);
+
       return { status: "sukses" };
+      
     }
 
     if (aksi === "upload_foto_profil") {
@@ -5549,40 +5559,30 @@ async function daftarNotifikasiHP() {
 
     try {
         const permission = await Notification.requestPermission();
-        if (permission !== 'granted') return;
+        if (permission !== 'granted') return; // Jika ditolak, berhenti. Jika sudah pernah diizinkan, ini akan langsung lewat tanpa pop-up.
 
         const registration = await navigator.serviceWorker.ready;
         let subscription = await registration.pushManager.getSubscription();
         
+        // Buat langganan baru jika belum ada (efek dari unsubscribe saat logout)
         if (!subscription) {
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(publicVapidKey) // Pastikan publicVapidKey Anda tidak berubah
+                applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
             });
         }
 
         let currentUserTarget = currentUser.username || currentUser.identitas;
-        const endpointStr = subscription.endpoint;
 
-        // CEK KEAMANAN: Apakah alamat HP ini sudah pernah dipakai akun lain di database?
-        const { data: cekExist } = await supabaseClient
-            .from('push_subscriptions')
-            .select('id, username')
-            .eq('subscription_json->>endpoint', endpointStr)
-            .maybeSingle();
+        // Cek dan timpa jika HP ini nyangkut di akun lain, atau buat baru
+        const { data: cekExist } = await supabaseClient.from('push_subscriptions').select('id, username').eq('subscription_json->>endpoint', subscription.endpoint).maybeSingle();
 
         if (cekExist) {
             if (cekExist.username !== currentUserTarget) {
-                // Jika HP dipakai akun beda, PINDAHKAN kepemilikan HP ini ke akun yang baru login!
-                await supabaseClient.from('push_subscriptions').update({ 
-                    username: currentUserTarget, role: currentUser.role 
-                }).eq('id', cekExist.id);
+                await supabaseClient.from('push_subscriptions').update({ username: currentUserTarget, role: currentUser.role }).eq('id', cekExist.id);
             }
         } else {
-            // HP benar-benar baru, simpan ke database
-            await supabaseClient.from('push_subscriptions').insert([{
-                username: currentUserTarget, role: currentUser.role, subscription_json: subscription
-            }]);
+            await supabaseClient.from('push_subscriptions').insert([{ username: currentUserTarget, role: currentUser.role, subscription_json: subscription }]);
         }
     } catch (err) {
         console.error('Gagal mendaftar notifikasi:', err);
@@ -5609,4 +5609,29 @@ async function tembakNotifikasi(target, jenisTarget, judul, pesan) {
     } catch(err) { 
         console.error("Gagal menembak notif:", err); 
     }
+}
+
+function kirimBroadcastAdmin() {
+    const target = document.getElementById('bcTarget').value;
+    const pesan = document.getElementById('bcPesan').value;
+    
+    if(!pesan.trim()) return showAlertBS("Peringatan", "Pesan pengumuman tidak boleh kosong!", "warning");
+    
+    const btn = document.querySelector('#modalBroadcast .btn-success');
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Mengirim...'; 
+    btn.disabled = true;
+    
+    tembakNotifikasi(target, 'role', 'Pengumuman Sekolah', pesan);
+    
+    setTimeout(() => {
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>Kirim Broadcast'; 
+        btn.disabled = false;
+        
+        let modalEl = document.getElementById("modalBroadcast");
+        let modalObj = bootstrap.Modal.getInstance(modalEl);
+        if(modalObj) modalObj.hide();
+        
+        showAlertBS("Sukses", "Notifikasi massal sedang dikirim ke perangkat tujuan.", "success");
+        document.getElementById('bcPesan').value = '';
+    }, 800);
 }
