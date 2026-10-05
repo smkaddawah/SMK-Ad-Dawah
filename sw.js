@@ -24,8 +24,8 @@ self.addEventListener('push', function(event) {
 
     const options = {
         body: data.body,
-        icon: 'https://i.ibb.co.com/LXG3HPx2/kop.png', // Logo sekolah Anda
-        badge: 'https://i.ibb.co.com/LXG3HPx2/kop.png',
+        icon: 'https://i.ibb.co.com/rfXvc7cX/icon-512x512.png', // Logo sekolah Anda
+        badge: 'https://i.ibb.co.com/rfXvc7cX/icon-512x512.png',
         vibrate: [200, 100, 200, 100, 200], // Efek getar di HP
         data: data.url || '/' // Halaman yang dibuka saat notif diklik
     };
