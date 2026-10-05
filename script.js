@@ -1111,7 +1111,7 @@ async function simpanLengkapLaporan(idLog) {
         
         if(typeof loadPending === 'function') loadPending();
         
-    } catch (err) { ...
+    } catch (err) {
         console.error(err);
         showAlertBS("Gagal", err.message || "Gagal menyimpan data", "error");
         if(btn) { 
