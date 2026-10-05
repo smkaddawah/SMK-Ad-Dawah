@@ -1,6 +1,6 @@
 {
   "name": "E-Raport & E-Disiplin SMK",
-  "short_name": "E-Raport SMK",
+  "short_name": "Addawah Interactif",
   "description": "Sistem Informasi Akademik & Kedisiplinan Siswa",
   "start_url": "./index.html",
   "display": "standalone",
