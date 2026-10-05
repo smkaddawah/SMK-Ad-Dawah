@@ -852,8 +852,32 @@ async function verifikasi(idLog, keputusan, isUnknown = false) {
         return showAlertBS("Stop!", "Anda harus Edit laporan ini dulu untuk menentukan Siapa Siswanya dan Apa Kategori Pelanggarannya!", "warning");
     }
     showConfirmBS(`Yakin ingin mengubah status laporan menjadi "${keputusan}"?`, async () => {
+        
+        // 1. Tangkap data laporan sebelum diupdate (untuk mengambil NISN & Poin)
+        const { data: logLama } = await supabaseClient.from('log_pelanggaran').select('nisn, poin').eq('id_log', idLog).maybeSingle();
+
+        // 2. Eksekusi Perubahan Status di Database
         const res = await panggilAPI({ aksi: "verifikasi", idLog, keputusan });
-        if (res.status === "sukses") { showAlertBS("Berhasil", `Laporan telah ${keputusan.toLowerCase()}`, "success"); loadPending(); }
+        
+        if (res.status === "sukses") { 
+            showAlertBS("Berhasil", `Laporan telah ${keputusan.toLowerCase()}`, "success"); 
+            
+            // 3. TEMBAK NOTIFIKASI JIKA DISETUJUI ADMIN
+            if (keputusan === 'Disetujui' && logLama && logLama.nisn) {
+                const nisn = logLama.nisn;
+                
+                // A. Notifikasi ke HP Siswa
+                tembakNotifikasi(nisn, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran disetujui Admin (+${logLama.poin} Poin).`);
+                
+                // B. Notifikasi ke HP Wali Kelas (Cari otomatis berdasarkan kelas siswa)
+                const { data: uData } = await supabaseClient.from('users').select('kelas').eq('username', nisn).maybeSingle();
+                if (uData && uData.kelas) {
+                    const { data: wData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', uData.kelas).maybeSingle();
+                    if (wData) tembakNotifikasi(wData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${nisn}) divalidasi Admin mendapat +${logLama.poin} Poin.`);
+                }
+            }
+            loadPending(); 
+        }
     });
 }
 
@@ -1062,31 +1086,32 @@ async function simpanLengkapLaporan(idLog) {
     }
 
     try {
-        // Update data ke database Supabase secara langsung & ubah status menjadi Disetujui
         const { error } = await supabaseClient.from('log_pelanggaran')
-            .update({
-                nisn: nisnBaru,
-                kode_pelanggaran: kodeBaru,
-                keterangan: ketBaru,
-                poin: parseInt(poinBaru || 0),
-                status: 'Disetujui' // Otomatis masuk ke data sah setelah divalidasi admin
-            })
+            .update({ nisn: nisnBaru, kode_pelanggaran: kodeBaru, keterangan: ketBaru, poin: parseInt(poinBaru || 0), status: 'Disetujui' })
             .eq('id_log', idLog);
 
         if (error) throw error;
 
         showAlertBS("Berhasil", "Data laporan berhasil divalidasi dan disetujui!", "success");
-        tembakNotifikasi(nisnBaru, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran Anda divalidasi oleh Admin (+${poinBaru} Poin). Cek menu Riwayat Pelanggaran.`);
+        
+        // 👇 TEMBAK NOTIFIKASI KE HP SISWA 👇
+        tembakNotifikasi(nisnBaru, 'username', 'Peringatan Kedisiplinan!', `Laporan pelanggaran Anda divalidasi oleh Admin (+${poinBaru} Poin).`);
+        
+        // 👇 TEMBAK NOTIFIKASI KE HP WALI KELAS 👇
+        const kelasSiswa = document.getElementById("editLaporKelas").value;
+        const { data: waliData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', kelasSiswa).maybeSingle();
+        if (waliData) {
+            tembakNotifikasi(waliData.username, 'username', 'Info Kelas Anda', `Siswa Anda (${nisnBaru}) divalidasi Admin mendapat +${poinBaru} Poin.`);
+        }
         
         // Tutup modal
         let modalEl = document.getElementById("modalEditLaporDynamic");
         let modalObj = bootstrap.Modal.getInstance(modalEl);
         if(modalObj) modalObj.hide();
         
-        // Refresh tabel pending admin
         if(typeof loadPending === 'function') loadPending();
         
-    } catch (err) {
+    } catch (err) { ...
         console.error(err);
         showAlertBS("Gagal", err.message || "Gagal menyimpan data", "error");
         if(btn) { 
@@ -2254,8 +2279,27 @@ async function panggilAPI(payload) {
     }
 
     if (aksi === "update_status_izin") {
-        const { error } = await supabaseClient.from('log_absensi').update({ status_izin: payload.status, pesan_tolak: payload.pesan || null }).eq('id', payload.idLog);
-        return error ? { status: "gagal", pesan: error.message } : { status: "sukses" };
+        // 1. Cari tahu dulu NISN/Username siswa yang mengajukan izin ini
+        const { data: dataIzin } = await supabaseClient.from('log_absensi').select('nisn').eq('id', payload.idLog).maybeSingle();
+
+        // 2. Update status izinnya (Disetujui/Ditolak) di database
+        const { error } = await supabaseClient.from('log_absensi')
+            .update({ status_izin: payload.status, pesan_tolak: payload.pesan || null })
+            .eq('id', payload.idLog);
+
+        if (error) return { status: "gagal", pesan: error.message };
+
+        // 3. Tembakkan notifikasi ke HP Siswa yang bersangkutan
+        if (dataIzin && dataIzin.nisn) {
+            let pesanNotif = payload.status === 'Disetujui' 
+                ? 'Pengajuan Izin/Sakit Anda telah DISETUJUI oleh Wali Kelas.' 
+                : `Pengajuan Anda DITOLAK. ${payload.pesan ? 'Alasan: ' + payload.pesan : 'Segera temui Wali Kelas.'}`;
+            
+            // Panggil fungsi notifikasi
+            tembakNotifikasi(dataIzin.nisn, 'username', `Status Izin: ${payload.status}`, pesanNotif);
+        }
+
+        return { status: "sukses" };
     }
 
     if (aksi === "lapor_anonim") {
@@ -2544,6 +2588,11 @@ async function kirimPengajuanIzin(e) {
         showAlertBS("Berhasil", "Pengajuan berhasil dikirim ke Wali Kelas!", "success");
         e.target.reset(); document.getElementById("izinBuktiBase64").value = "";
         loadRiwayatIzinSiswa(currentUser.identitas);
+        const { data: waliData } = await supabaseClient.from('users').select('username').eq('role', 'walikelas').eq('kelas', currentUser.kelas).maybeSingle();
+        if (waliData) {
+            let jns = document.getElementById("izinKeterangan").value === 'S' ? 'Sakit' : 'Izin';
+            tembakNotifikasi(waliData.username, 'username', 'Pengajuan Izin Baru!', `Siswa Anda (${currentUser.nama}) mengajukan ${jns}. Mohon divalidasi.`);
+        }
     } else showAlertBS("Gagal", res.pesan, "error");
     
     btn.innerHTML = '<i class="fa-solid fa-paper-plane me-2"></i>Kirim Pengajuan'; btn.disabled = false;
