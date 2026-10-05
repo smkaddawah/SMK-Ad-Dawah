@@ -3194,6 +3194,7 @@ const daftarMenuApp = {
     'admin_absensi': { judul: 'Sistem QR', icon: 'fa-qrcode', color: 'bg-primary' },
     'admin_cetakqr': { judul: 'Cetak QR', icon: 'fa-print', color: 'bg-dark' },
     'admin_eraport': { judul: 'Set E-Raport', icon: 'fa-cogs', color: 'bg-danger' },
+    'admin_broadcast': { judul: 'Broadcast', icon: 'fa-bullhorn', color: 'bg-dark' },
 
     // --- MENU SISWA ---
     'siswa_profil': { judul: 'Profil', icon: 'fa-user-astronaut', color: 'bg-primary' },
@@ -3218,7 +3219,7 @@ const daftarMenuApp = {
 
 // 2. PEMBAGIAN HAK AKSES MENU SESUAI ROLE
 const menuPerRole = {
-    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport'],
+    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport', 'admin_broadcast'],
     'siswa': ['siswa_profil', 'siswa_logabsen', 'siswa_pelanggaran', 'siswa_izin', 'siswa_lapor', 'siswa_poin'],
     'guru': ['guru_profil', 'guru_logabsen', 'guru_lapor', 'guru_eraport'],
     'walikelas': ['wali_siswa', 'wali_absensi', 'wali_izin', 'wali_eraport']
@@ -3509,6 +3510,11 @@ async function loadLogAbsenGuruMobile() {
 // 4. MENGHUBUNGKAN TAB GURU KE FUNGSI ABSENSI BARU
 // =====================================================================
 function bukaHalamanApp(idMenu, judul) {
+
+    if (idMenu === 'admin_broadcast') {
+        new bootstrap.Modal(document.getElementById('modalBroadcast')).show();
+        return; // Hentikan eksekusi di sini agar tidak pindah ke halaman lain
+    }
     document.getElementById("mobileAppDashboard").style.display = "none";
     document.getElementById("halamanFiturApp").style.display = "block";
     document.getElementById("judulHalamanFitur").innerText = judul.toUpperCase();
