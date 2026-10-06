@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eraport-v1';
+const CACHE_NAME = 'eraport-v2';
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
