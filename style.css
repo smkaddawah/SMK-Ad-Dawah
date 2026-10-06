@@ -8,6 +8,8 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+
+
 /* Custom Utilities */
 .text-primary-green { 
     color: var(--primary-green) !important;
@@ -154,4 +156,50 @@ body.dark-mode .bg-light {
     background-color: rgba(30, 41, 59, 0.6) !important;
     color: var(--text-main) !important;
     border-color: var(--border-color) !important;
+}
+
+
+
+
+/* Mengecilkan font dasar aplikasi */
+body, .card-body {
+    font-size: 0.85rem; 
+}
+
+/* Merapikan tabel untuk mode mobile */
+.table {
+    font-size: 0.85rem;
+}
+
+.table th {
+    font-size: 0.8rem;
+    white-space: nowrap; /* Mencegah teks judul tabel turun ke baris baru */
+    vertical-align: middle;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Mengecilkan label/badge (Guru, Wali Kelas, dll) */
+.badge {
+    font-size: 0.7rem;
+    padding: 0.4em 0.6em;
+    font-weight: 500;
+}
+
+/* Mengecilkan tombol aksi (Edit, Hapus, Tambah Data) */
+.btn {
+    font-size: 0.8rem;
+}
+
+.btn-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Menyesuaikan judul halaman */
+h4, h5, .modal-title {
+    font-size: 1.1rem;
+    font-weight: 600;
 }
