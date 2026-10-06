@@ -1384,13 +1384,18 @@
     <script src="rekap_absensi.js"></script>
     <!-- Register Service Worker untuk PWA -->
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('PWA Service Worker terdaftar!', reg.scope))
-                    .catch(err => console.log('Gagal daftar PWA: ', err));
-            });
-        }
-    </script>
+  if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+          // Tambahkan /SMK-Ad-Dawah/ secara eksplisit pada path dan scope
+          navigator.serviceWorker.register('/SMK-Ad-Dawah/sw.js', { scope: '/SMK-Ad-Dawah/' })
+              .then((registration) => {
+                  console.log("PWA Service Worker terdaftar! Scope:", registration.scope);
+              })
+              .catch((err) => {
+                  console.log("Gagal mendaftar Service Worker:", err);
+              });
+      });
+  }
+</script>
 </body>
 </html>
