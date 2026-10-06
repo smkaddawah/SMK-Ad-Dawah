@@ -1,22 +1,28 @@
 {
-  "name": "E-Raport & E-Disiplin SMK",
-  "short_name": "E-Raport SMK",
-  "description": "Sistem Informasi Akademik & Kedisiplinan Siswa",
-  "display": "fullscreen",
+  "name": "ADDAWAH MOBILE",
+  "short_name": "ADDAWAH MOBILE",
+  "description": "Portal pencatatan pelanggaran, absensi, dan akademik siswa.",
+  "lang": "id",
+  "dir": "ltr",
   "start_url": "/SMK-Ad-Dawah/",
-  "scope": "/SMK-Ad-Dawah/"
-  "background_color": "#ffffff",
+  "scope": "/SMK-Ad-Dawah/",
+  "id": "/SMK-Ad-Dawah/",
+  "display": "standalone",
+  "orientation": "any",
   "theme_color": "#198754",
+  "background_color": "#ffffff",
   "icons": [
     {
       "src": "icon-192x192.png",
+      "type": "image/png",
       "sizes": "192x192",
-      "type": "image/png"
+      "purpose": "any maskable"
     },
     {
       "src": "icon-512x512.png",
+      "type": "image/png",
       "sizes": "512x512",
-      "type": "image/png"
+      "purpose": "any maskable"
     }
   ]
 }
