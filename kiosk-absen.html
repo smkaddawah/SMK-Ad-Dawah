@@ -401,9 +401,17 @@
         document.getElementById('currentClock').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
     }, 1000);
 
-    // 2. Kunci Kursor ke Input RFID
+    // 2. Kunci Kursor ke Input RFID & Aktifkan Fullscreen
     document.addEventListener('click', () => {
+        // Kembalikan fokus ke input
         document.getElementById('rfidInput').focus();
+        
+        // Memicu fullscreen saat halaman diklik pertama kali
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.log(`Gagal fullscreen: ${err.message}`);
+            });
+        }
     });
 
     // 3. Tangkap Input
