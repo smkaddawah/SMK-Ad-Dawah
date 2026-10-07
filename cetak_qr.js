@@ -1,4 +1,4 @@
-// ================= LOGIKA CETAK KARTU QR (MURNI SUPABASE) =================
+// ================= LOGIKA CETAK KARTU (MURNI SUPABASE) =================
 function filterCetakQr() {
     const kat = document.getElementById("cetakQrKategori").value;
     const wadahKelas = document.getElementById("wadahCetakQrKelas");
@@ -14,7 +14,7 @@ function filterCetakQr() {
 
 async function tampilkanPreviewKartuQR() {
     const area = document.getElementById("areaCetakKartuQR");
-    const kat = document.getElementById("cetakQrKategori").value; // 'siswa' atau 'guru'
+    const kat = document.getElementById("cetakQrKategori").value; 
     const kls = document.getElementById("cetakQrKelas").value;
     
     area.innerHTML = '<div class="col-12 text-center py-5"><i class="fa-solid fa-spinner fa-spin fa-2x text-primary"></i><br>Menyiapkan kartu dari Supabase...</div>';
@@ -29,7 +29,6 @@ async function tampilkanPreviewKartuQR() {
             }
             query = query.order('nama_lengkap', { ascending: true });
         } else {
-            // Tarik GURU dan WALI KELAS sekaligus langsung dari Supabase!
             query = query.in('role', ['guru', 'walikelas']).order('nama_lengkap', { ascending: true });
         }
 
@@ -42,54 +41,68 @@ async function tampilkanPreviewKartuQR() {
             return;
         }
 
-        // 1. Kumpulkan semua desain kartu ke dalam variabel teks
         let semuaKartuHTML = "";
-        targetData.forEach((user, i) => {
-            let namaTampil = user.nama_lengkap || user.username;
-            
-            let labelRole = "SISWA";
-            if (user.role === 'guru') labelRole = 'GURU / STAFF';
-            if (user.role === 'walikelas') labelRole = 'WALI KELAS';
-            
-            let qrText = String(user.username).replace(/'/g, "").trim();
+        targetData.forEach((user) => {
+            // Judul Header menyesuaikan Role
+            let titleKartu = user.role === 'siswa' ? "KARTU PELAJAR" : "KARTU IDENTITAS GURU";
 
+            // Logika Ketentuan Kartu Pelajar / Guru (Margin, padding, dan line-height dirapatkan)
+            let ketentuanHTML = "";
+            if (user.role === 'siswa') {
+                ketentuanHTML = `
+                    <div class="text-start flex-grow-1 d-flex flex-column px-1" style="font-size: 0.5rem; line-height: 1.25; position: relative; z-index: 2;">
+                        <ol class="ps-3 pe-1 mb-0 flex-grow-1" style="text-align: justify;">
+                            <li class="pb-1">Kartu Pelajar wajib dibawa dan digunakan selama berada di lingkungan sekolah.</li>
+                            <li class="pb-1">Kartu Pelajar merupakan identitas resmi siswa SMK Addawah Jakarta dan tidak boleh dipindahtangankan.</li>
+                            <li class="pb-1">Kartu Pelajar wajib dijaga dengan baik dan tidak boleh dicoret, dilipat, atau dirusak.</li>
+                            <li class="pb-1">Kartu Pelajar wajib ditunjukkan apabila diminta oleh guru, tenaga kependidikan, atau petugas sekolah.</li>
+                            <li class="pb-1">Apabila Kartu Pelajar hilang, siswa wajib segera melapor kepada pihak sekolah dan dikenakan biaya penggantian sebesar Rp 100.000.</li>
+                            <li>Apabila kartu ini hilang, bagi yang menemukan diharapkan mengembalikan ke sekolah.</li>
+                        </ol>
+                        <div class="text-center fst-italic mt-auto mb-1 fw-bold text-success" style="font-size: 0.5rem; line-height: 1.1;">“Jaga Kartu Pelajar, Jaga Identitas dan Tanggung Jawab sebagai Siswa.”</div>
+                    </div>
+                `;
+            } else {
+                ketentuanHTML = `
+                    <div class="text-start flex-grow-1 d-flex flex-column px-1" style="font-size: 0.5rem; line-height: 1.25; position: relative; z-index: 2;">
+                        <ol class="ps-3 pe-1 mb-0 flex-grow-1" style="text-align: justify;">
+                            <li class="pb-1">Kartu Identitas Guru wajib dibawa dan digunakan selama berada di lingkungan sekolah.</li>
+                            <li class="pb-1">Kartu Identitas Guru merupakan identitas resmi Dewan Guru SMK Addawah Jakarta dan tidak boleh dipindahtangankan.</li>
+                            <li class="pb-1">Kartu Identitas Guru wajib dijaga dengan baik dan tidak boleh dicoret, dilipat, atau dirusak.</li>
+                            <li class="pb-1">Kartu Identitas Guru wajib ditunjukkan apabila diperlukan untuk kepentingan administrasi atau identifikasi.</li>
+                            <li class="pb-1">Apabila Kartu Identitas Guru hilang, wajib segera melapor kepada pihak sekolah dan dikenakan biaya penggantian sebesar Rp50.000.</li>
+                            <li>Apabila kartu ini hilang, bagi yang menemukan diharapkan mengembalikan ke sekolah.</li>
+                        </ol>
+                        <div class="text-center fst-italic mt-auto mb-1 fw-bold text-success" style="font-size: 0.5rem; line-height: 1.1;">"Identitas, Profesionalitas, dan Integritas dalam Menjalankan Tugas."</div>
+                    </div>
+                `;
+            }
+
+            // Render Desain Kartu Belakang dengan penambahan Watermark Logo
             semuaKartuHTML += `
-                <div class="col-auto">
-                    <div class="card border border-dark border-2 rounded-3 p-3 text-center bg-white shadow-sm" style="width: 250px; height: 380px; position: relative;">
-                        <h6 class="fw-bold text-dark mb-0 border-bottom border-dark pb-2">KARTU ABSENSI<br><small class="text-success">SMK AD-DA'WAH</small></h6>
-                        <div class="d-flex justify-content-center my-3">
-                            <div id="qrPrint_${i}" style="padding: 10px; border: 2px solid #ccc; border-radius: 10px; background-color: #fff; width: 144px; height: 144px;"></div>
+                <div class="col-auto mb-2" style="page-break-inside: avoid; break-inside: avoid;">
+                    <div class="card border border-dark border-2 rounded-3 p-2 text-center bg-white shadow-sm d-flex flex-column" style="width: 54mm; height: 86mm; box-sizing: border-box; position: relative; overflow: hidden; z-index: 1;">
+                        
+                        <!-- Watermark Logo Transparan -->
+                        <img src="assets/img/logo.png" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 75%; opacity: 0.12; z-index: 0;" alt="Watermark">
+
+                        <!-- Header -->
+                        <div class="fw-bold text-dark mb-2 border-bottom border-dark pb-2" style="font-size: 0.85rem; line-height: 1.2; position: relative; z-index: 2;">
+                            ${titleKartu}<br><span class="text-success" style="font-size: 0.75rem;">SMK AD-DA'WAH</span>
                         </div>
-                        <h5 class="fw-bold text-dark mb-0" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${namaTampil}">${namaTampil}</h5>
-                        <p class="text-muted small mb-0">${labelRole}</p>
-                        <p class="fw-bold text-danger mb-0">${qrText}</p>
-                        ${user.kelas && user.role === 'siswa' ? `<p class="badge bg-secondary mb-0 mt-2">${user.kelas}</p>` : ''}
+                        
+                        <!-- Area Ketentuan Mengisi Penuh Sisa Kartu -->
+                        ${ketentuanHTML}
+                        
                     </div>
                 </div>
             `;
         });
 
-        // 2. Tampilkan semua kartu ke layar
-        area.innerHTML = `<div class="row justify-content-center g-3">${semuaKartuHTML}</div>`;
-
-        // 3. Render Barcode QR Code
-        setTimeout(() => {
-            targetData.forEach((user, i) => {
-                const qrWadah = document.getElementById(`qrPrint_${i}`);
-                if (qrWadah) {
-                    qrWadah.innerHTML = ""; 
-                    let qrText = String(user.username).replace(/'/g, "").trim();
-                    new QRCode(qrWadah, { 
-                        text: qrText, 
-                        width: 120, 
-                        height: 120 
-                    });
-                }
-            });
-        }, 250); 
+        area.innerHTML = `<div class="row justify-content-center g-2">${semuaKartuHTML}</div>`;
 
     } catch (error) {
-        console.error("Error Supabase Cetak QR:", error);
+        console.error("Error Supabase Cetak Kartu:", error);
         area.innerHTML = `<div class="col-12 text-center text-danger py-5">Gagal memuat data: ${error.message}</div>`;
     }
 }
@@ -109,12 +122,15 @@ function downloadPDFKartuQR() {
         showAlertBS("Menyimpan PDF", "Harap tunggu, proses generate PDF memerlukan waktu...", "info");
     }
     
+    // Konfigurasi PDF yang diperbarui dengan Anti-Terpotong (Pagebreak avoid-all)
     const opt = {
-        margin:       10,
-        filename:     `Kartu_QR_${document.getElementById("cetakQrKategori").value}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        margin:       10, // Margin aman kertas A4
+        filename:     `Bagian_Belakang_Kartu_${document.getElementById("cetakQrKategori").value}.pdf`,
+        image:        { type: 'jpeg', quality: 1 },
+        html2canvas:  { scale: 10, useCORS: true, letterRendering: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } 
     };
+    
     html2pdf().set(opt).from(area).save();
-}       
+}
