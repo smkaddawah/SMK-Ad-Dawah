@@ -1369,6 +1369,56 @@
   </div>
 </div>
 
+<!-- Modal Pendaftaran RFID -->
+<div class="modal fade" id="modalRFID" tabindex="-1" aria-labelledby="modalRFIDLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title fw-bold" id="modalRFIDLabel">
+          <i class="bi bi-credit-card me-2"></i>Registrasi Kartu RFID
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        
+        <div id="alertBoxRFID" class="alert d-none" role="alert"></div>
+
+        <!-- FILTER KELAS DINAMIS (BARU) -->
+        <div class="mb-3">
+          <label class="form-label fw-bold text-success">Filter Kelas</label>
+          <select id="filterKelasRFID" class="form-select shadow-sm" onchange="muatDataUserRFID()">
+            <option value="">-- Semua Kelas / Guru & Staf --</option>
+            <!-- Opsi kelas akan diisi otomatis oleh JavaScript -->
+          </select>
+        </div>
+
+        <!-- 1. Pilih User -->
+        <div class="mb-4">
+          <label class="form-label fw-bold text-success">Pilih Nama (Siswa/Guru)</label>
+          <select id="userSelectRFID" class="form-select shadow-sm">
+            <option value="">-- Memuat data... --</option>
+          </select>
+        </div>
+
+       <!-- 2. Scan Kartu -->
+<div class="mb-3">
+  <div class="d-flex justify-content-between align-items-end mb-2">
+    <label class="form-label fw-bold text-success mb-0">Tempelkan Kartu Baru</label>
+    <!-- Tombol ini awalnya disembunyikan (d-none) -->
+    <button type="button" id="btnHapusRFID" class="btn btn-sm btn-danger d-none" onclick="hapusKartuRFID()">
+      <i class="bi bi-trash"></i> Hapus Kartu
+    </button>
+  </div>
+  <input type="text" id="rfidInputModal" class="form-control text-center bg-light shadow-sm" 
+         placeholder="Fokuskan kursor di sini..." autocomplete="off">
+  <small class="text-muted mt-2 d-block text-center">Data akan otomatis tertimpa jika Anda menempelkan kartu baru.</small>
+</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
     <!-- Panggil file JS Anda -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>

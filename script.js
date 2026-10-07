@@ -3195,6 +3195,7 @@ const daftarMenuApp = {
     'admin_cetakqr': { judul: 'Cetak QR', icon: 'fa-print', color: 'bg-dark' },
     'admin_eraport': { judul: 'Set E-Raport', icon: 'fa-cogs', color: 'bg-danger' },
     'admin_broadcast': { judul: 'Broadcast', icon: 'fa-bullhorn', color: 'bg-dark' },
+    'admin_rfid': { judul: 'Daftar RFID', icon: 'fa-id-card', color: 'bg-success' },
 
     // --- MENU SISWA ---
     'siswa_profil': { judul: 'Profil', icon: 'fa-user-astronaut', color: 'bg-primary' },
@@ -3219,7 +3220,7 @@ const daftarMenuApp = {
 
 // 2. PEMBAGIAN HAK AKSES MENU SESUAI ROLE
 const menuPerRole = {
-    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport', 'admin_broadcast'],
+    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport', 'admin_broadcast', 'admin_rfid'],
     'siswa': ['siswa_profil', 'siswa_logabsen', 'siswa_pelanggaran', 'siswa_izin', 'siswa_lapor', 'siswa_poin'],
     'guru': ['guru_profil', 'guru_logabsen', 'guru_lapor', 'guru_eraport'],
     'walikelas': ['wali_siswa', 'wali_absensi', 'wali_izin', 'wali_eraport']
@@ -3514,6 +3515,11 @@ function bukaHalamanApp(idMenu, judul) {
     if (idMenu === 'admin_broadcast') {
         new bootstrap.Modal(document.getElementById('modalBroadcast')).show();
         return; // Hentikan eksekusi di sini agar tidak pindah ke halaman lain
+    }
+
+    if (idMenu === 'admin_rfid') {
+        bukaModalRFID();
+        return;
     }
     document.getElementById("mobileAppDashboard").style.display = "none";
     document.getElementById("halamanFiturApp").style.display = "block";
@@ -5640,4 +5646,191 @@ function kirimBroadcastAdmin() {
         showAlertBS("Sukses", "Notifikasi massal sedang dikirim ke perangkat tujuan.", "success");
         document.getElementById('bcPesan').value = '';
     }, 800);
+}
+
+// ================= FITUR REGISTRASI RFID =================
+async function bukaModalRFID() {
+    const modal = new bootstrap.Modal(document.getElementById('modalRFID'));
+    modal.show();
+    
+    const filterKelas = document.getElementById('filterKelasRFID');
+    filterKelas.innerHTML = '<option value="">-- Memuat filter... --</option>';
+
+    // Tarik data kelas hanya untuk siswa
+    const { data: dataSiswa, error } = await supabaseClient
+        .from('users')
+        .select('kelas')
+        .eq('role', 'siswa');
+
+    // 1. Opsi Default
+    filterKelas.innerHTML = '<option value="">-- Semua Data --</option>';
+    
+    // 2. Opsi Khusus Role (Guru, TU, Admin, dll)
+    filterKelas.innerHTML += `
+        <optgroup label="Berdasarkan Posisi">
+            <option value="role_guru">Guru / Wali Kelas</option>
+            <option value="role_admin">Admin / TU / Staf</option>
+        </optgroup>
+    `;
+
+    // 3. Opsi Kelas Siswa (Otomatis dari Database)
+    if (!error && dataSiswa) {
+        const listKelas = [...new Set(dataSiswa.map(s => s.kelas).filter(k => k))].sort();
+        if (listKelas.length > 0) {
+            filterKelas.innerHTML += '<optgroup label="Berdasarkan Kelas Siswa">';
+            listKelas.forEach(k => {
+                filterKelas.innerHTML += `<option value="kelas_${k}">Kelas ${k}</option>`;
+            });
+            filterKelas.innerHTML += '</optgroup>';
+        }
+    }
+    
+    await muatDataUserRFID();
+    
+    document.getElementById('modalRFID').addEventListener('shown.bs.modal', function () {
+        document.getElementById('rfidInputModal').focus();
+    }, { once: true });
+}
+
+async function muatDataUserRFID() {
+    const filterValue = document.getElementById('filterKelasRFID').value;
+    const userSelect = document.getElementById('userSelectRFID');
+    userSelect.innerHTML = '<option value="">-- Memuat data... --</option>';
+
+    // Siapkan query dasar
+    let query = supabaseClient
+        .from('users')
+        .select('username, nama_lengkap, role, kelas, rfid_uid')
+        .order('nama_lengkap', { ascending: true });
+
+    // Pecah logika filter berdasarkan "role_" atau "kelas_"
+    if (filterValue.startsWith('role_')) {
+        const roleTarget = filterValue.replace('role_', '');
+        if (roleTarget === 'guru') {
+            query = query.in('role', ['guru', 'walikelas']); // Masukkan semua tipe guru
+        } else if (roleTarget === 'admin') {
+            query = query.in('role', ['admin', 'tu', 'staf']); // Sesuaikan role staf SMK Anda
+        }
+    } else if (filterValue.startsWith('kelas_')) {
+        const kelasTarget = filterValue.replace('kelas_', '');
+        query = query.eq('kelas', kelasTarget).eq('role', 'siswa');
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        tampilkanAlertRFID('Gagal memuat data user!', 'danger');
+        return;
+    }
+
+    userSelect.innerHTML = '<option value="">-- Ketik untuk mencari nama --</option>';
+    
+    data.forEach(user => {
+        const infoTambahan = user.role === 'siswa' && user.kelas ? ` - ${user.kelas}` : ` - ${user.role}`;
+        
+        // INDIKATOR KARTU: Di sini posisinya, akan muncul di dalam dropdown sebelah nama user
+        const statusKartu = user.rfid_uid ? ' (✅ Selesai)' : ' (❌ Belum Ada Kartu)';
+        
+        userSelect.innerHTML += `<option value="${user.username}">${user.nama_lengkap}${infoTambahan}${statusKartu}</option>`;
+    });
+}
+
+document.getElementById('rfidInputModal').addEventListener('keydown', async function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        let scannedUID = this.value.trim();
+        this.value = ''; 
+
+        const selectedUsername = document.getElementById('userSelectRFID').value;
+
+        if (!selectedUsername) {
+            tampilkanAlertRFID('Pilih nama di atas terlebih dahulu!', 'danger');
+            return;
+        }
+
+        if (scannedUID !== '') {
+            await simpanKartuRFID(selectedUsername, scannedUID);
+        }
+    }
+});
+
+async function simpanKartuRFID(username, uid) {
+    const { error } = await supabaseClient
+        .from('users')
+        .update({ rfid_uid: uid })
+        .eq('username', username);
+
+    if (error) {
+        if (error.code === '23505') { 
+            tampilkanAlertRFID(`Gagal! Kartu ini sudah dipakai orang lain.`, 'danger');
+        } else {
+            tampilkanAlertRFID(`Terjadi kesalahan: ${error.message}`, 'danger');
+        }
+    } else {
+        tampilkanAlertRFID(`Sukses! Kartu berhasil dihubungkan.`, 'success');
+        await muatDataUserRFID(); // Refresh dropdown
+        document.getElementById('userSelectRFID').value = ''; 
+        document.getElementById('rfidInputModal').focus(); 
+    }
+}
+
+// Memunculkan tombol "Hapus Kartu" HANYA JIKA user sudah punya kartu
+document.getElementById('userSelectRFID').addEventListener('change', function() {
+    const btnHapus = document.getElementById('btnHapusRFID');
+    const teksDipilih = this.options[this.selectedIndex].text;
+    
+    // Cek apakah di namanya ada indikator (✅ Selesai)
+    if (teksDipilih.includes('✅')) {
+        btnHapus.classList.remove('d-none');
+    } else {
+        btnHapus.classList.add('d-none');
+    }
+    
+    // Kembalikan fokus ke input scan
+    document.getElementById('rfidInputModal').focus();
+});
+
+// Fungsi untuk mengosongkan RFID di database
+async function hapusKartuRFID() {
+    const selectedUsername = document.getElementById('userSelectRFID').value;
+    
+    if (!selectedUsername) return;
+
+    // Konfirmasi keamanan agar tidak tidak sengaja terhapus
+    const konfirmasi = confirm("Yakin ingin menghapus akses kartu untuk pengguna ini?");
+    if (!konfirmasi) {
+        document.getElementById('rfidInputModal').focus();
+        return;
+    }
+
+    // Ubah rfid_uid menjadi null di Supabase
+    const { error } = await supabaseClient
+        .from('users')
+        .update({ rfid_uid: null }) 
+        .eq('username', selectedUsername);
+
+    if (error) {
+        tampilkanAlertRFID(`Gagal menghapus: ${error.message}`, 'danger');
+    } else {
+        tampilkanAlertRFID(`Kartu berhasil dihapus dari sistem!`, 'success');
+        
+        // Sembunyikan tombol hapus dan perbarui daftar
+        document.getElementById('btnHapusRFID').classList.add('d-none');
+        await muatDataUserRFID(); 
+        
+        // Reset pilihan ke nama tersebut agar kelihatan statusnya jadi (❌ Belum Ada Kartu)
+        document.getElementById('userSelectRFID').value = selectedUsername;
+        document.getElementById('rfidInputModal').focus();
+    }
+}
+
+function tampilkanAlertRFID(pesan, tipe) {
+    const alertBox = document.getElementById('alertBoxRFID');
+    alertBox.className = `alert alert-${tipe} fw-bold`;
+    alertBox.innerText = pesan;
+    alertBox.classList.remove('d-none');
+    
+    setTimeout(() => {
+        alertBox.classList.add('d-none');
+    }, 4000);
 }
