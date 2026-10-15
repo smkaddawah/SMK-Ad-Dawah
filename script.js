@@ -549,39 +549,36 @@ function toggleEditProfil(isEdit) {
 async function previewDanUploadFotoGuru(input) {
     const file = input.files[0];
     if (!file) return;
-    
-    document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-warning'><i class='fa-solid fa-spinner fa-spin me-1'></i>Mengunggah foto...</span>";
-    
+
+    const statusEl = document.getElementById('statusUploadFotoGuru');
+    if (statusEl) statusEl.innerHTML = "<span class='text-warning'><i class='fa-solid fa-spinner fa-spin me-1'></i>Mengunggah foto...</span>";
+
     const reader = new FileReader();
     reader.onload = async function(e) {
         let rawBase64 = e.target.result;
-        document.getElementById('imgProfilGuru').src = rawBase64;
-        
+        const imgEl = document.getElementById('imgProfilGuru');
+        if (imgEl) imgEl.src = rawBase64;
+
         try {
-            // Ambil identifier yang valid untuk guru/walas
-            let identifier = currentUser.username || currentUser.identitas;
-            
-            // Coba update berdasarkan username terlebih dahulu
-            let { error } = await supabaseClient
-                .from('users')
-                .update({ foto: rawBase64 })
-                .eq('username', identifier);
-                
-            // Jika gagal karena kolom username tidak ada/beda, coba pakai 'identitas'
-            if (error) {
-                let { error: err2 } = await supabaseClient
-                    .from('users')
-                    .update({ foto: rawBase64 })
-                    .eq('identitas', identifier);
-                if (err2) throw err2;
+            let identifier = currentUser ? (currentUser.username || currentUser.identitas) : "";
+            const res = await panggilAPI({
+                aksi: "upload_foto_profil",
+                username: String(identifier).trim(),
+                fotoBase64: rawBase64
+            });
+
+            if (res.status === "sukses") {
+                if (statusEl) statusEl.innerHTML = "<span class='text-success'><i class='fa-solid fa-check me-1'></i>Foto berhasil diperbarui!</span>";
+                if (currentUser) {
+                    currentUser.foto_profil = res.url;
+                    if (currentUser.rawData) currentUser.rawData.foto_profil = res.url;
+                    localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+                }
+            } else {
+                if (statusEl) statusEl.innerHTML = `<span class='text-danger'>Gagal: ${res.pesan}</span>`;
             }
-            
-            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-success'><i class='fa-solid fa-check me-1'></i>Foto sukses tersimpan!</span>";
-            currentUser.foto = rawBase64; 
-            
         } catch (err) {
-            console.error("Error Simpan Foto:", err);
-            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-danger'>Gagal menyimpan ke database. Cek console.</span>";
+            if (statusEl) statusEl.innerHTML = "<span class='text-danger'>Gagal mengunggah foto.</span>";
         }
     };
     reader.readAsDataURL(file);
@@ -1168,28 +1165,32 @@ function filterTabelSiswa() {
   tb.innerHTML = siswaTerfilter.map(s => {
     let bdg = '<span class="badge bg-success">Aman</span>';
     let tombolCetakSP = '';
-    if (s.poin >= 100) { bdg = '<span class="badge bg-danger">SP 3</span>'; tombolCetakSP = `<button class="btn btn-sm btn-danger fw-bold me-1" onclick="cetakSuratSP('${s.nisn}', '${s.nama}', '${s.kelas}', ${s.poin}, 'SP 3')">SP 3</button>`; }
-    else if (s.poin >= 75) { bdg = '<span class="badge bg-warning text-dark">SP 2</span>'; tombolCetakSP = `<button class="btn btn-sm btn-warning text-dark fw-bold me-1" onclick="cetakSuratSP('${s.nisn}', '${s.nama}', '${s.kelas}', ${s.poin}, 'SP 2')">SP 2</button>`; }
-    else if (s.poin >= 50) { bdg = '<span class="badge bg-warning text-dark">SP 1</span>'; tombolCetakSP = `<button class="btn btn-sm btn-warning text-dark fw-bold me-1" onclick="cetakSuratSP('${s.nisn}', '${s.nama}', '${s.kelas}', ${s.poin}, 'SP 1')">SP 1</button>`; }
+    
+    // Escape tanda petik tunggal agar JS onclick tidak crash
+    let namaAman = String(s.nama || "").replace(/'/g, "\\'");
+    let nisnAman = String(s.nisn || "").replace(/'/g, "\\'");
+    let kelasAman = String(s.kelas || "").replace(/'/g, "\\'");
+    let passAman = String(s.password || "123456").replace(/'/g, "\\'");
+
+    if (s.poin >= 100) { bdg = '<span class="badge bg-danger">SP 3</span>'; tombolCetakSP = `<button class="btn btn-sm btn-danger fw-bold me-1" onclick="cetakSuratSP('${nisnAman}', '${namaAman}', '${kelasAman}', ${s.poin}, 'SP 3')">SP 3</button>`; }
+    else if (s.poin >= 75) { bdg = '<span class="badge bg-warning text-dark">SP 2</span>'; tombolCetakSP = `<button class="btn btn-sm btn-warning text-dark fw-bold me-1" onclick="cetakSuratSP('${nisnAman}', '${namaAman}', '${kelasAman}', ${s.poin}, 'SP 2')">SP 2</button>`; }
+    else if (s.poin >= 50) { bdg = '<span class="badge bg-warning text-dark">SP 1</span>'; tombolCetakSP = `<button class="btn btn-sm btn-warning text-dark fw-bold me-1" onclick="cetakSuratSP('${nisnAman}', '${namaAman}', '${kelasAman}', ${s.poin}, 'SP 1')">SP 1</button>`; }
     
     return `<tr>
       <td><input type="checkbox" class="checkbox-siswa" value="${s.nisn}" onclick="updateTombolHapusMassal()"></td>
       <td><b>${s.nisn}</b></td>
       <td>${s.nama}</td>
       <td><span class="badge bg-secondary">${s.kelas}</span></td>
-      
-      <!-- INI TOMBOL POIN YANG SUDAH DIRAPIKAN AGAR TIDAK ACAK-ACAKAN -->
       <td>
-        <button class="btn btn-danger rounded-pill fw-bold shadow-sm" style="padding: 1px 10px; font-size: 13px;" onclick="bukaModalRiwayatAdmin('${s.nisn}', '${s.nama.replace(/'/g, "\\'")}')" title="Klik untuk lihat riwayat & hapus pelanggaran">
+        <button class="btn btn-danger rounded-pill fw-bold shadow-sm" style="padding: 1px 10px; font-size: 13px;" onclick="bukaModalRiwayatAdmin('${nisnAman}', '${namaAman}')">
           ${s.poin}
         </button>
       </td>
-      
       <td>${bdg}</td>
       <td>
         ${tombolCetakSP}
-        <button class="btn btn-sm btn-outline-info me-1" onclick="bukaModalSiswa('edit', '${s.nisn}', '${s.nama}', '${s.kelas}', '${s.password || 123456}')"><i class="fa-solid fa-pen"></i></button>
-        <button class="btn btn-sm btn-outline-danger" onclick="hapusSiswa('${s.nisn}')"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn btn-sm btn-outline-info me-1" onclick="bukaModalSiswa('edit', '${nisnAman}', '${namaAman}', '${kelasAman}', '${passAman}')"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="hapusSiswa('${nisnAman}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>`;
   }).join("");
@@ -2498,75 +2499,110 @@ async function unduhExcelRekapPelanggaran(kelasOverride, bulanOverride) {
 
 // ================= SIMPAN PROFIL SISWA (LENGKAP & AMAN) =================
 async function simpanProfilSiswa(event) {
-    event.preventDefault();
+    if (event) event.preventDefault();
     
-    // 1. Ambil data dari form input edit profil
-    const nisn = document.getElementById("profNisn").value;
+    const nisnInput = document.getElementById("profNisn").value.trim();
+    const nisn = nisnInput || (currentUser ? (currentUser.username || currentUser.identitas) : "");
+    
+    if (!nisn) {
+        showAlertBS("Error", "NISN/ID Siswa tidak ditemukan. Silakan muat ulang halaman.", "danger");
+        return;
+    }
+
+    // 1. Tangkap tanggal lahir, ubah string kosong jadi null agar Supabase tidak error
+    let inputTgl = document.getElementById("profTglLahir") ? document.getElementById("profTglLahir").value : null;
+    let tglLahirBersih = (inputTgl === "") ? null : inputTgl;
+
+    // 2. Susun data dengan aman
     const payloadData = {
-        nama_lengkap: document.getElementById("profNama").value,
-        kelas: document.getElementById("profKelas").value,
-        jenis_kelamin: document.getElementById("profJk").value,
-        tempat_lahir: document.getElementById("profTempatLahir").value,
-        tanggal_lahir: document.getElementById("profTglLahir").value,
-        agama: document.getElementById("profAgama").value,
-        no_hp: document.getElementById("profNoHp").value,
-        email: document.getElementById("profEmail").value,
-        alamat: document.getElementById("profAlamat").value,
-        nama_ayah: document.getElementById("profNamaAyah").value,
-        no_hp_ayah: document.getElementById("profHpAyah").value,
-        nama_ibu: document.getElementById("profNamaIbu").value,
-        no_hp_ibu: document.getElementById("profHpIbu").value
+        aksi: "update_profil_siswa",
+        username: nisn,
+        nama_lengkap: document.getElementById("profNama")?.value.trim() || "",
+        kelas: document.getElementById("profKelas")?.value.trim() || "",
+        jenis_kelamin: document.getElementById("profJk")?.value || null,
+        tempat_lahir: document.getElementById("profTempatLahir")?.value.trim() || null,
+        tanggal_lahir: tglLahirBersih, 
+        agama: document.getElementById("profAgama")?.value || null,
+        no_hp: document.getElementById("profNoHp")?.value.trim() || null,
+        email: document.getElementById("profEmail")?.value.trim() || null,
+        alamat: document.getElementById("profAlamat")?.value.trim() || null,
+        nama_ayah: document.getElementById("profNamaAyah")?.value.trim() || null,
+        no_hp_ayah: document.getElementById("profHpAyah")?.value.trim() || null,
+        nama_ibu: document.getElementById("profNamaIbu")?.value.trim() || null,
+        no_hp_ibu: document.getElementById("profHpIbu")?.value.trim() || null
     };
 
-    // 2. TOMBOL LOADING SUPAYA USER TAHU SEDANG DIPROSES
-    const btnSimpan = document.getElementById("btnSimpanProfilSiswa");
-    if(btnSimpan) { btnSimpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...'; btnSimpan.disabled = true; }
-
-    // 3. INI BAGIAN YANG TADI HILANG: PANGGIL API KE DATABASE SUPABASE
-    const res = await panggilAPI({ 
-        aksi: "update_profil_siswa", 
-        nisn: nisn, 
-        data: payloadData 
+    // 3. Hapus data yang bernilai undefined/null agar JSON tidak invalid
+    Object.keys(payloadData).forEach(key => {
+        if (payloadData[key] === undefined) delete payloadData[key];
     });
 
-    // Kembalikan tombol seperti semula
-    if(btnSimpan) { btnSimpan.innerHTML = '<i class="fa-solid fa-save me-2"></i>Simpan'; btnSimpan.disabled = false; }
+    const btnSimpan = document.querySelector("#editProfilSiswa button[type='submit']");
+    if (btnSimpan) {
+        btnSimpan.disabled = true;
+        btnSimpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...';
+    }
 
-    // 4. CEK HASILNYA (Variabel 'res' sekarang sudah memiliki isi/data)
-    if (res.status === "sukses") {
-        showAlertBS("Berhasil", "Data diri berhasil diperbarui!", "success");
-        const p = payloadData;
-        
-        // Update Memori Lokal
-        currentUser.nama = p.nama_lengkap;
-        currentUser.kelas = p.kelas;
-        currentUser.rawData = { ...currentUser.rawData, ...p };
-        localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
-        
-        // Update Nama & Kelas di Judul Utama
-        if(document.getElementById("txtNamaUser")) document.getElementById("txtNamaUser").innerText = `${currentUser.nama} (SISWA)`;
-        if(document.getElementById("txtNamaProfilSiswa")) document.getElementById("txtNamaProfilSiswa").innerText = currentUser.nama;
-        if(document.getElementById("txtKelasProfilSiswa")) document.getElementById("txtKelasProfilSiswa").innerText = currentUser.kelas;
-        
-        // Update Teks di Mode View secara Real-Time
-        if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = p.nama_lengkap || "-";
-        if(document.getElementById("viewKelas")) document.getElementById("viewKelas").innerText = p.kelas || "-";
-        if(document.getElementById("viewJk")) document.getElementById("viewJk").innerText = p.jenis_kelamin === 'L' ? 'Laki-Laki' : (p.jenis_kelamin === 'P' ? 'Perempuan' : '-');
-        if(document.getElementById("viewTempatLahir")) document.getElementById("viewTempatLahir").innerText = p.tempat_lahir || "-";
-        if(document.getElementById("viewTglLahir")) document.getElementById("viewTglLahir").innerText = p.tanggal_lahir || "-";
-        if(document.getElementById("viewAgama")) document.getElementById("viewAgama").innerText = p.agama || "-";
-        if(document.getElementById("viewNoHp")) document.getElementById("viewNoHp").innerText = p.no_hp || "-";
-        if(document.getElementById("viewEmail")) document.getElementById("viewEmail").innerText = p.email || "-";
-        if(document.getElementById("viewAlamat")) document.getElementById("viewAlamat").innerText = p.alamat || "-";
-        if(document.getElementById("viewNamaAyah")) document.getElementById("viewNamaAyah").innerText = p.nama_ayah || "-";
-        if(document.getElementById("viewHpAyah")) document.getElementById("viewHpAyah").innerText = p.no_hp_ayah || "-";
-        if(document.getElementById("viewNamaIbu")) document.getElementById("viewNamaIbu").innerText = p.nama_ibu || "-";
-        if(document.getElementById("viewHpIbu")) document.getElementById("viewHpIbu").innerText = p.no_hp_ibu || "-";
+    try {
+        const res = await panggilAPI(payloadData);
+        if (res.status === "sukses") {
+            showAlertBS("Berhasil", "Profil berhasil diperbarui!", "success");
+            
+            if (currentUser) {
+                currentUser.nama = payloadData.nama_lengkap;
+                currentUser.rawData = { ...currentUser.rawData, ...payloadData };
+                localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+            }
+            
+            toggleEditProfil(false);
+            aktifkanTampilanUser(currentUser);
+        } else {
+            showAlertBS("Gagal", res.pesan || "Gagal memperbarui profil.", "danger");
+        }
+    } catch (err) {
+        console.error("Error Simpan Profil:", err);
+        showAlertBS("Error", "Terjadi kesalahan saat menyimpan data.", "danger");
+    } finally {
+        if (btnSimpan) {
+            btnSimpan.disabled = false;
+            btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk me-2"></i>Simpan Perubahan';
+        }
+    }
+}
 
-        // Tembak kembali ke Mode BACA (View)
-        toggleEditProfil(false);
-    } else {
-        showAlertBS("Gagal", res.pesan || "Terjadi kesalahan sistem", "error");
+async function simpanProfilGuru(event) {
+    if (event) event.preventDefault();
+    
+    const idGuru = currentUser ? (currentUser.username || currentUser.identitas) : "";
+    if (!idGuru) return showAlertBS("Error", "ID Guru tidak ditemukan.", "danger");
+
+    // Sesuaikan ID (misal: profGuruNama) dengan ID input di form HTML Guru Anda
+    const payloadData = {
+        aksi: "update_profil_guru", // Pastikan backend/panggilAPI mengenali aksi ini
+        username: idGuru,
+        nama_lengkap: document.getElementById("profGuruNama")?.value.trim() || "",
+        no_hp: document.getElementById("profGuruNoHp")?.value.trim() || null,
+        email: document.getElementById("profGuruEmail")?.value.trim() || null,
+        alamat: document.getElementById("profGuruAlamat")?.value.trim() || null
+    };
+
+    const btnSimpan = document.querySelector("#editProfilGuru button[type='submit']");
+    if (btnSimpan) { btnSimpan.disabled = true; btnSimpan.innerHTML = 'Menyimpan...'; }
+
+    try {
+        const res = await panggilAPI(payloadData);
+        if (res.status === "sukses") {
+            showAlertBS("Berhasil", "Profil guru diperbarui!", "success");
+            currentUser.nama = payloadData.nama_lengkap;
+            currentUser.rawData = { ...currentUser.rawData, ...payloadData };
+            localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+        } else {
+            showAlertBS("Gagal", res.pesan, "danger");
+        }
+    } catch (err) {
+        showAlertBS("Error", "Terjadi kesalahan.", "danger");
+    } finally {
+        if (btnSimpan) { btnSimpan.disabled = false; btnSimpan.innerHTML = 'Simpan'; }
     }
 }
     // ================= FUNGSI PENGAJUAN IZIN SISWA =================
@@ -3441,41 +3477,39 @@ function renderQRGuruMobile() {
     });
 }
 
-async function previewDanUploadFotoGuru(input) {
+async function previewDanUploadFotoSiswa(input) {
     const file = input.files[0];
     if (!file) return;
-    
-    document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-warning'><i class='fa-solid fa-spinner fa-spin me-1'></i>Mengunggah foto...</span>";
-    
+
+    const statusEl = document.getElementById('statusUploadFotoSiswa');
+    if (statusEl) statusEl.innerHTML = "<span class='text-warning'><i class='fa-solid fa-spinner fa-spin me-1'></i>Mengunggah foto...</span>";
+
     const reader = new FileReader();
     reader.onload = async function(e) {
         let rawBase64 = e.target.result;
-        document.getElementById('imgProfilGuru').src = rawBase64;
-        
+        const imgEl = document.getElementById('imgProfilSiswa');
+        if (imgEl) imgEl.src = rawBase64;
+
         try {
-            let identifier = currentUser.username || currentUser.identitas;
-            
-            // PERBAIKAN: Gunakan kolom 'foto_profil' sesuai struktur tabel Anda
-            let { error } = await supabaseClient
-                .from('users')
-                .update({ foto_profil: rawBase64 })
-                .eq('username', identifier);
-                
-            if (error) {
-                let { error: err2 } = await supabaseClient
-                    .from('users')
-                    .update({ foto_profil: rawBase64 })
-                    .eq('identitas', identifier);
-                if (err2) throw err2;
+            let identifier = currentUser ? (currentUser.identitas || currentUser.username) : "";
+            const res = await panggilAPI({
+                aksi: "upload_foto_profil",
+                username: String(identifier).trim(),
+                fotoBase64: rawBase64
+            });
+
+            if (res.status === "sukses") {
+                if (statusEl) statusEl.innerHTML = "<span class='text-success'><i class='fa-solid fa-check me-1'></i>Foto berhasil diperbarui!</span>";
+                if (currentUser) {
+                    currentUser.foto_profil = res.url;
+                    if (currentUser.rawData) currentUser.rawData.foto_profil = res.url;
+                    localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+                }
+            } else {
+                if (statusEl) statusEl.innerHTML = `<span class='text-danger'>Gagal: ${res.pesan}</span>`;
             }
-            
-            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-success'><i class='fa-solid fa-check me-1'></i>Foto sukses tersimpan!</span>";
-            currentUser.foto_profil = rawBase64; 
-            currentUser.foto = rawBase64; // Fallback
-            
         } catch (err) {
-            console.error("Error Simpan Foto:", err);
-            document.getElementById('statusUploadFotoGuru').innerHTML = "<span class='text-danger'>Gagal menyimpan ke database.</span>";
+            if (statusEl) statusEl.innerHTML = "<span class='text-danger'>Gagal mengunggah foto.</span>";
         }
     };
     reader.readAsDataURL(file);
@@ -5653,38 +5687,6 @@ async function bukaModalRFID() {
     const modal = new bootstrap.Modal(document.getElementById('modalRFID'));
     modal.show();
     
-    const filterKelas = document.getElementById('filterKelasRFID');
-    filterKelas.innerHTML = '<option value="">-- Memuat filter... --</option>';
-
-    // Tarik data kelas hanya untuk siswa
-    const { data: dataSiswa, error } = await supabaseClient
-        .from('users')
-        .select('kelas')
-        .eq('role', 'siswa');
-
-    // 1. Opsi Default
-    filterKelas.innerHTML = '<option value="">-- Semua Data --</option>';
-    
-    // 2. Opsi Khusus Role (Guru, TU, Admin, dll)
-    filterKelas.innerHTML += `
-        <optgroup label="Berdasarkan Posisi">
-            <option value="role_guru">Guru / Wali Kelas</option>
-            <option value="role_admin">Admin / TU / Staf</option>
-        </optgroup>
-    `;
-
-    // 3. Opsi Kelas Siswa (Otomatis dari Database)
-    if (!error && dataSiswa) {
-        const listKelas = [...new Set(dataSiswa.map(s => s.kelas).filter(k => k))].sort();
-        if (listKelas.length > 0) {
-            filterKelas.innerHTML += '<optgroup label="Berdasarkan Kelas Siswa">';
-            listKelas.forEach(k => {
-                filterKelas.innerHTML += `<option value="kelas_${k}">Kelas ${k}</option>`;
-            });
-            filterKelas.innerHTML += '</optgroup>';
-        }
-    }
-    
     await muatDataUserRFID();
     
     document.getElementById('modalRFID').addEventListener('shown.bs.modal', function () {
@@ -5692,28 +5694,21 @@ async function bukaModalRFID() {
     }, { once: true });
 }
 
-async function muatDataUserRFID() {
-    const filterValue = document.getElementById('filterKelasRFID').value;
-    const userSelect = document.getElementById('userSelectRFID');
-    userSelect.innerHTML = '<option value="">-- Memuat data... --</option>';
+// Tambahkan event listener agar data berubah saat filter diganti
+document.getElementById('filterKelasRFID').addEventListener('change', muatDataUserRFID);
 
+async function muatDataUserRFID() {
+    const kelasDipilih = document.getElementById('filterKelasRFID').value;
+    
     // Siapkan query dasar
     let query = supabaseClient
         .from('users')
         .select('username, nama_lengkap, role, kelas, rfid_uid')
         .order('nama_lengkap', { ascending: true });
 
-    // Pecah logika filter berdasarkan "role_" atau "kelas_"
-    if (filterValue.startsWith('role_')) {
-        const roleTarget = filterValue.replace('role_', '');
-        if (roleTarget === 'guru') {
-            query = query.in('role', ['guru', 'walikelas']); // Masukkan semua tipe guru
-        } else if (roleTarget === 'admin') {
-            query = query.in('role', ['admin', 'tu', 'staf']); // Sesuaikan role staf SMK Anda
-        }
-    } else if (filterValue.startsWith('kelas_')) {
-        const kelasTarget = filterValue.replace('kelas_', '');
-        query = query.eq('kelas', kelasTarget).eq('role', 'siswa');
+    // Terapkan filter jika ada kelas yang dipilih
+    if (kelasDipilih !== '') {
+        query = query.eq('kelas', kelasDipilih);
     }
 
     const { data, error } = await query;
@@ -5723,14 +5718,12 @@ async function muatDataUserRFID() {
         return;
     }
 
-    userSelect.innerHTML = '<option value="">-- Ketik untuk mencari nama --</option>';
+    const userSelect = document.getElementById('userSelectRFID');
+    userSelect.innerHTML = '<option value="">-- Pilih Nama --</option>';
     
     data.forEach(user => {
         const infoTambahan = user.role === 'siswa' && user.kelas ? ` - ${user.kelas}` : ` - ${user.role}`;
-        
-        // INDIKATOR KARTU: Di sini posisinya, akan muncul di dalam dropdown sebelah nama user
-        const statusKartu = user.rfid_uid ? ' (✅ Selesai)' : ' (❌ Belum Ada Kartu)';
-        
+        const statusKartu = user.rfid_uid ? ' (✅ Punya Kartu)' : '';
         userSelect.innerHTML += `<option value="${user.username}">${user.nama_lengkap}${infoTambahan}${statusKartu}</option>`;
     });
 }
@@ -5755,6 +5748,7 @@ document.getElementById('rfidInputModal').addEventListener('keydown', async func
 });
 
 async function simpanKartuRFID(username, uid) {
+    // PERBAIKAN: Menggunakan supabaseClient
     const { error } = await supabaseClient
         .from('users')
         .update({ rfid_uid: uid })
@@ -5768,59 +5762,9 @@ async function simpanKartuRFID(username, uid) {
         }
     } else {
         tampilkanAlertRFID(`Sukses! Kartu berhasil dihubungkan.`, 'success');
-        await muatDataUserRFID(); // Refresh dropdown
+        await muatDataUserRFID(); 
         document.getElementById('userSelectRFID').value = ''; 
         document.getElementById('rfidInputModal').focus(); 
-    }
-}
-
-// Memunculkan tombol "Hapus Kartu" HANYA JIKA user sudah punya kartu
-document.getElementById('userSelectRFID').addEventListener('change', function() {
-    const btnHapus = document.getElementById('btnHapusRFID');
-    const teksDipilih = this.options[this.selectedIndex].text;
-    
-    // Cek apakah di namanya ada indikator (✅ Selesai)
-    if (teksDipilih.includes('✅')) {
-        btnHapus.classList.remove('d-none');
-    } else {
-        btnHapus.classList.add('d-none');
-    }
-    
-    // Kembalikan fokus ke input scan
-    document.getElementById('rfidInputModal').focus();
-});
-
-// Fungsi untuk mengosongkan RFID di database
-async function hapusKartuRFID() {
-    const selectedUsername = document.getElementById('userSelectRFID').value;
-    
-    if (!selectedUsername) return;
-
-    // Konfirmasi keamanan agar tidak tidak sengaja terhapus
-    const konfirmasi = confirm("Yakin ingin menghapus akses kartu untuk pengguna ini?");
-    if (!konfirmasi) {
-        document.getElementById('rfidInputModal').focus();
-        return;
-    }
-
-    // Ubah rfid_uid menjadi null di Supabase
-    const { error } = await supabaseClient
-        .from('users')
-        .update({ rfid_uid: null }) 
-        .eq('username', selectedUsername);
-
-    if (error) {
-        tampilkanAlertRFID(`Gagal menghapus: ${error.message}`, 'danger');
-    } else {
-        tampilkanAlertRFID(`Kartu berhasil dihapus dari sistem!`, 'success');
-        
-        // Sembunyikan tombol hapus dan perbarui daftar
-        document.getElementById('btnHapusRFID').classList.add('d-none');
-        await muatDataUserRFID(); 
-        
-        // Reset pilihan ke nama tersebut agar kelihatan statusnya jadi (❌ Belum Ada Kartu)
-        document.getElementById('userSelectRFID').value = selectedUsername;
-        document.getElementById('rfidInputModal').focus();
     }
 }
 
