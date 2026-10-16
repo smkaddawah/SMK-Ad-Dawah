@@ -345,6 +345,7 @@
                 </div>
                 <h2 id="statusTitleCard">ABSENSI BERHASIL</h2>
                 <p id="statusMessageCard">Terima kasih sudah melakukan absensi</p>
+                <div id="pelanggaranContainer" class="d-none"></div>
             </div>
         </div>
     </main>
@@ -377,7 +378,6 @@
     const scanKelas = document.getElementById('scanKelas');
     const scanTime = document.getElementById('scanTime');
     const scanStatusBadge = document.getElementById('scanStatusBadge');
-    const scanStatusText = document.getElementById('scanStatusText');
     
     // Elemen UI Box Status Kanan
     const statusBoxKanan = document.getElementById('statusBoxKanan');
@@ -385,28 +385,27 @@
     const statusTitleCard = document.getElementById('statusTitleCard');
     const statusMessageCard = document.getElementById('statusMessageCard');
 
+    // Elemen UI Pelanggaran (Tambahkan div khusus di HTML Anda untuk ini)
+    // Pastikan Anda sudah membuat <div id="pelanggaranContainer"></div> di dalam statusBoxKanan pada file HTML
+    const pelanggaranContainer = document.getElementById('pelanggaranContainer'); 
+
     const audioSuccess = document.getElementById('audioSuccess');
     const audioError = document.getElementById('audioError');
+    
+    // Timer global untuk menghitung 10 detik
     let resetTimer; 
 
     // 1. Script Jam & Tanggal Digital Real-time
     setInterval(() => {
         const now = new Date();
-        
-        // Format Tanggal: Rabu, 08 Oktober 2025
         const opsiTanggal = { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' };
         document.getElementById('currentDate').innerText = now.toLocaleDateString('id-ID', opsiTanggal);
-        
-        // Format Jam: HH:MM:SS
         document.getElementById('currentClock').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
     }, 1000);
 
     // 2. Kunci Kursor ke Input RFID & Aktifkan Fullscreen
     document.addEventListener('click', () => {
-        // Kembalikan fokus ke input
         document.getElementById('rfidInput').focus();
-        
-        // Memicu fullscreen saat halaman diklik pertama kali
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(err => {
                 console.log(`Gagal fullscreen: ${err.message}`);
@@ -422,14 +421,16 @@
             this.value = ''; 
             
             if(scannedUID !== '') {
+                // JIKA ADA KARTU BARU MASUK, BATALKAN HITUNGAN MUNDUR DAN LANGSUNG PROSES (NIBAN)
+                clearTimeout(resetTimer);
                 prosesAbsensi(scannedUID);
             }
         }
     });
 
-    // 4. Logika Utama Absensi (Supabase) - TIDAK ADA PERUBAHAN LOGIKA
+    // 4. Logika Utama Absensi (Supabase) dengan Tambahan Ambil Poin
     async function prosesAbsensi(uid) {
-        // Ambil data user, ditambahkan pemanggilan kolom "kelas" agar muncul di card
+        // Ambil data user
         const { data: user, error: userError } = await supabaseClient
             .from('users')
             .select('username, nama_lengkap, foto_profil, role, kelas')
@@ -440,6 +441,27 @@
             tampilkanError("KARTU TIDAK TERDAFTAR", "Silakan hubungi administrator");
             return;
         }
+
+        // === FITUR BARU: AMBIL TOTAL POIN PELANGGARAN ===
+        let totalPoin = 0;
+        let daftarPelanggaran = [];
+        
+        // Hanya cek pelanggaran jika dia siswa
+        if(user.role === 'siswa') {
+            const { data: pelanggaranData, error: pelError } = await supabaseClient
+                .from('log_pelanggaran')
+                .select('keterangan, poin')
+                .eq('nisn', user.username)
+                .order('tanggal', { ascending: false });
+
+            if (!pelError && pelanggaranData && pelanggaranData.length > 0) {
+                // Hitung total poin
+                totalPoin = pelanggaranData.reduce((sum, item) => sum + (item.poin || 0), 0);
+                // Ambil 3 pelanggaran terakhir untuk rincian
+                daftarPelanggaran = pelanggaranData.slice(0, 3); 
+            }
+        }
+        // ===============================================
 
         const now = new Date();
         const tglHariIni = now.toLocaleDateString('en-CA'); 
@@ -464,7 +486,7 @@
                 }]);
             
             if (!insertError) {
-                tampilkanSukses(user, "MASUK", jamSekarang, "ABSENSI BERHASIL", "Terima kasih sudah melakukan absensi");
+                tampilkanSukses(user, "MASUK", jamSekarang, "ABSENSI BERHASIL", "Terima kasih sudah melakukan absensi", totalPoin, daftarPelanggaran);
             }
         } else {
             // LOGIKA PULANG / DOUBLE TAP
@@ -489,14 +511,13 @@
                 .eq('id', logHariIni.id);
 
             if (!updateError) {
-                tampilkanSukses(user, "PULANG", jamSekarang, "ABSENSI PULANG BERHASIL", "Hati-hati di jalan pulang");
+                tampilkanSukses(user, "PULANG", jamSekarang, "ABSENSI PULANG BERHASIL", "Hati-hati di jalan pulang", totalPoin, daftarPelanggaran);
             }
         }
     }
 
-    // 5. MENGATUR UI SUKSES SESUAI DESAIN BARU
-    function tampilkanSukses(user, statusKehadiran, jamAksi, judulStatus, pesanStatus) {
-        clearTimeout(resetTimer);
+    // 5. MENGATUR UI SUKSES
+    function tampilkanSukses(user, statusKehadiran, jamAksi, judulStatus, pesanStatus, totalPoin, daftarPelanggaran) {
         audioSuccess.currentTime = 0;
         audioSuccess.play().catch(e => console.log('Audio pending'));
 
@@ -527,16 +548,56 @@
         statusTitleCard.innerText = judulStatus;
         statusMessageCard.innerText = pesanStatus;
 
+        // === RENDER POIN PELANGGARAN DI LAYAR ===
+        // === RENDER POIN PELANGGARAN DI LAYAR ===
+        if (pelanggaranContainer) {
+            if (user.role === 'siswa') {
+                if (totalPoin > 0) {
+                    // Tampilan jika ada poin pelanggaran (Warna Merah)
+                    let listPelanggaranHTML = daftarPelanggaran.map(p => 
+                        `<li style="font-size: 0.9rem; color: #555;">${p.keterangan} <span class="text-danger fw-bold">(+${p.poin})</span></li>`
+                    ).join('');
+
+                    pelanggaranContainer.innerHTML = `
+                        <div class="mt-4 p-3 border rounded bg-light" style="border-left: 5px solid #dc3545 !important;">
+                            <h5 class="text-danger fw-bold mb-1">TOTAL POIN PELANGGARAN: <span style="font-size: 2rem;">${totalPoin}</span></h5>
+                            <p class="mb-2 text-muted" style="font-size: 0.85rem;">Terakhir kali tercatat:</p>
+                            <ul class="mb-0 text-start">
+                                ${listPelanggaranHTML}
+                            </ul>
+                        </div>
+                    `;
+                } else {
+                    // Tampilan apresiasi jika poin 0 (Warna Hijau)
+                    pelanggaranContainer.innerHTML = `
+                        <div class="mt-4 p-3 border rounded bg-light" style="border-left: 5px solid #198754 !important;">
+                            <h5 class="text-success fw-bold mb-1">TOTAL POIN PELANGGARAN: <span style="font-size: 2rem;">0</span></h5>
+                            <p class="mb-0 text-dark" style="font-size: 0.95rem;">
+                                <i class="fa-solid fa-star text-warning"></i> <b>Luar Biasa!</b> Terima kasih sudah mematuhi tata tertib. Pertahankan kedisiplinanmu!
+                            </p>
+                        </div>
+                    `;
+                }
+                pelanggaranContainer.classList.remove('d-none');
+            } else {
+                // Sembunyikan jika yang absen adalah Guru / Staf
+                pelanggaranContainer.innerHTML = '';
+                pelanggaranContainer.classList.add('d-none');
+            }
+        }
+        // ========================================
+        // ========================================
+
         // Transisi Layar
         standbyArea.classList.add('d-none');
         profileArea.classList.remove('d-none');
 
-        resetTimer = setTimeout(() => kembalikanKeStandby(), 4000);
+        // DURASI TAMPIL DIUBAH MENJADI 10 DETIK (10000 ms)
+        resetTimer = setTimeout(() => kembalikanKeStandby(), 10000);
     }
 
-    // 6. MENGATUR UI ERROR SESUAI DESAIN BARU
+    // 6. MENGATUR UI ERROR
     function tampilkanError(judulError, pesanError) {
-        clearTimeout(resetTimer);
         audioError.currentTime = 0;
         audioError.play().catch(e => console.log('Audio pending'));
 
@@ -556,11 +617,18 @@
         statusTitleCard.innerText = judulError;
         statusMessageCard.innerText = pesanError;
 
+        // Sembunyikan container poin jika error
+        if (pelanggaranContainer) {
+            pelanggaranContainer.innerHTML = '';
+            pelanggaranContainer.classList.add('d-none');
+        }
+
         // Transisi Layar
         standbyArea.classList.add('d-none');
         profileArea.classList.remove('d-none');
 
-        resetTimer = setTimeout(() => kembalikanKeStandby(), 4000); 
+        // DURASI TAMPIL DIUBAH MENJADI 10 DETIK (10000 ms)
+        resetTimer = setTimeout(() => kembalikanKeStandby(), 10000); 
     }
 
     // Fungsi Pembantu untuk mengembalikan layar
