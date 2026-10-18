@@ -389,8 +389,8 @@ function aktifkanTampilanUser(res) {
         // --- MENGISI DATA KE TAMPILAN SHOW & TAMPILAN EDIT PROFIL ---
         if (res.rawData) {
            const d = res.rawData;
-           let tanggalMatang = konversiTanggalExcel(d.tanggal_lahir);
-           let tanggalTampil = formatTampilTanggal(d.tanggal_lahir);
+           let tanggalMatang = d.tanggal_lahir ? String(d.tanggal_lahir).split('T')[0] : "";
+let tanggalTampil = d.tanggal_lahir ? new Date(d.tanggal_lahir).toLocaleDateString('id-ID') : "-";
            
            if(document.getElementById("viewNisn")) document.getElementById("viewNisn").innerText = d.username || "-";
            if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = d.nama_lengkap || "-";
@@ -2501,78 +2501,64 @@ async function unduhExcelRekapPelanggaran(kelasOverride, bulanOverride) {
 async function simpanProfilSiswa(event) {
     if (event) event.preventDefault();
     
-    const nisnInput = document.getElementById("profNisn").value.trim();
-    const nisn = nisnInput || (currentUser ? (currentUser.username || currentUser.identitas) : "");
-    
-    if (!nisn) {
-        showAlertBS("Error", "NISN/ID Siswa tidak ditemukan. Silakan muat ulang halaman.", "danger");
-        return;
-    }
+    // 1. Dapatkan NISN target
+    const nisn = document.getElementById("profNisn")?.value.trim() || (currentUser ? currentUser.username : "");
+    if (!nisn) return showAlertBS("Error", "ID/NISN Siswa tidak ditemukan.", "danger");
 
-    // 1. Tangkap tanggal lahir, ubah string kosong jadi null agar Supabase tidak error
-    let inputTgl = document.getElementById("profTglLahir") ? document.getElementById("profTglLahir").value : null;
-    let tglLahirBersih = (inputTgl === "") ? null : inputTgl;
-
-    // 2. Susun data dengan aman
-   // 1. Tangkap semua data mentah dari form
+    // 2. Kumpulkan data dari form HTML
     const payloadData = {
-        nama_lengkap: document.getElementById("profNama")?.value,
-        kelas: document.getElementById("profKelas")?.value,
+        nama_lengkap: document.getElementById("profNama")?.value.trim(),
+        kelas: document.getElementById("profKelas")?.value.trim(),
         jenis_kelamin: document.getElementById("profJk")?.value,
-        tempat_lahir: document.getElementById("profTempatLahir")?.value,
+        tempat_lahir: document.getElementById("profTempatLahir")?.value.trim(),
         tanggal_lahir: document.getElementById("profTglLahir")?.value,
         agama: document.getElementById("profAgama")?.value,
-        no_hp: document.getElementById("profNoHp")?.value,
-        email: document.getElementById("profEmail")?.value,
-        alamat: document.getElementById("profAlamat")?.value,
-        nama_ayah: document.getElementById("profNamaAyah")?.value,
-        no_hp_ayah: document.getElementById("profHpAyah")?.value,
-        nama_ibu: document.getElementById("profNamaIbu")?.value,
-        no_hp_ibu: document.getElementById("profHpIbu")?.value
+        no_hp: document.getElementById("profNoHp")?.value.trim(),
+        email: document.getElementById("profEmail")?.value.trim(),
+        alamat: document.getElementById("profAlamat")?.value.trim(),
+        nama_ayah: document.getElementById("profNamaAyah")?.value.trim(),
+        no_hp_ayah: document.getElementById("profHpAyah")?.value.trim(),
+        nama_ibu: document.getElementById("profNamaIbu")?.value.trim(),
+        no_hp_ibu: document.getElementById("profHpIbu")?.value.trim()
     };
 
-    // 2. Hapus key yang isinya kosong ("") atau undefined
-    // Ini mencegah error 400 karena Supabase menolak string kosong pada tipe Date/Int
+    // 3. PEMBERSIHAN KETAT: Buang data yang kosong/undefined agar Supabase tidak Error 400
     Object.keys(payloadData).forEach(key => {
-        if (payloadData[key] === undefined || payloadData[key] === null || String(payloadData[key]).trim() === "") {
-            delete payloadData[key]; 
+        if (payloadData[key] === undefined || payloadData[key] === null || payloadData[key] === "") {
+            delete payloadData[key];
         }
     });
 
-    // 3. Masukkan kembali aksi dan username yang wajib ada
-    payloadData.aksi = "update_profil_siswa";
-    payloadData.username = nisn;
-
-    const btnSimpan = document.querySelector("#editProfilSiswa button[type='submit']");
-    if (btnSimpan) {
-        btnSimpan.disabled = true;
-        btnSimpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...';
-    }
+    const btn = document.querySelector("#editProfilSiswa button[type='submit']");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Menyimpan...'; }
 
     try {
-        const res = await panggilAPI(payloadData);
-        if (res.status === "sukses") {
-            showAlertBS("Berhasil", "Profil berhasil diperbarui!", "success");
-            
-            if (currentUser) {
-                currentUser.nama = payloadData.nama_lengkap;
-                currentUser.rawData = { ...currentUser.rawData, ...payloadData };
-                localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
-            }
-            
-            toggleEditProfil(false);
-            aktifkanTampilanUser(currentUser);
-        } else {
-            showAlertBS("Gagal", res.pesan || "Gagal memperbarui profil.", "danger");
+        // 4. UPDATE LANGSUNG KE SUPABASE (Tanpa lewat panggilAPI)
+        const { error } = await supabaseClient
+            .from('users')
+            .update(payloadData)
+            .eq('username', nisn);
+
+        if (error) throw error;
+
+        // 5. Update UI dan LocalStorage jika sukses
+        showAlertBS("Berhasil", "Profil berhasil diperbarui!", "success");
+        
+        if (currentUser) {
+            currentUser.nama = payloadData.nama_lengkap || currentUser.nama;
+            currentUser.kelas = payloadData.kelas || currentUser.kelas;
+            currentUser.rawData = { ...currentUser.rawData, ...payloadData };
+            localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
         }
+        
+        if (typeof toggleEditProfil === 'function') toggleEditProfil(false);
+        if (typeof aktifkanTampilanUser === 'function') aktifkanTampilanUser(currentUser);
+
     } catch (err) {
-        console.error("Error Simpan Profil:", err);
-        showAlertBS("Error", "Terjadi kesalahan saat menyimpan data.", "danger");
+        console.error("Gagal update profil:", err);
+        showAlertBS("Gagal", err.message || "Terjadi kesalahan saat menghubungi database.", "danger");
     } finally {
-        if (btnSimpan) {
-            btnSimpan.disabled = false;
-            btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk me-2"></i>Simpan Perubahan';
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-save me-2"></i>Simpan Perubahan'; }
     }
 }
 
