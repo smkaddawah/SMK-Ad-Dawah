@@ -2514,28 +2514,34 @@ async function simpanProfilSiswa(event) {
     let tglLahirBersih = (inputTgl === "") ? null : inputTgl;
 
     // 2. Susun data dengan aman
+   // 1. Tangkap semua data mentah dari form
     const payloadData = {
-        aksi: "update_profil_siswa",
-        username: nisn,
-        nama_lengkap: document.getElementById("profNama")?.value.trim() || "",
-        kelas: document.getElementById("profKelas")?.value.trim() || "",
-        jenis_kelamin: document.getElementById("profJk")?.value || null,
-        tempat_lahir: document.getElementById("profTempatLahir")?.value.trim() || null,
-        tanggal_lahir: tglLahirBersih, 
-        agama: document.getElementById("profAgama")?.value || null,
-        no_hp: document.getElementById("profNoHp")?.value.trim() || null,
-        email: document.getElementById("profEmail")?.value.trim() || null,
-        alamat: document.getElementById("profAlamat")?.value.trim() || null,
-        nama_ayah: document.getElementById("profNamaAyah")?.value.trim() || null,
-        no_hp_ayah: document.getElementById("profHpAyah")?.value.trim() || null,
-        nama_ibu: document.getElementById("profNamaIbu")?.value.trim() || null,
-        no_hp_ibu: document.getElementById("profHpIbu")?.value.trim() || null
+        nama_lengkap: document.getElementById("profNama")?.value,
+        kelas: document.getElementById("profKelas")?.value,
+        jenis_kelamin: document.getElementById("profJk")?.value,
+        tempat_lahir: document.getElementById("profTempatLahir")?.value,
+        tanggal_lahir: document.getElementById("profTglLahir")?.value,
+        agama: document.getElementById("profAgama")?.value,
+        no_hp: document.getElementById("profNoHp")?.value,
+        email: document.getElementById("profEmail")?.value,
+        alamat: document.getElementById("profAlamat")?.value,
+        nama_ayah: document.getElementById("profNamaAyah")?.value,
+        no_hp_ayah: document.getElementById("profHpAyah")?.value,
+        nama_ibu: document.getElementById("profNamaIbu")?.value,
+        no_hp_ibu: document.getElementById("profHpIbu")?.value
     };
 
-    // 3. Hapus data yang bernilai undefined/null agar JSON tidak invalid
+    // 2. Hapus key yang isinya kosong ("") atau undefined
+    // Ini mencegah error 400 karena Supabase menolak string kosong pada tipe Date/Int
     Object.keys(payloadData).forEach(key => {
-        if (payloadData[key] === undefined) delete payloadData[key];
+        if (payloadData[key] === undefined || payloadData[key] === null || String(payloadData[key]).trim() === "") {
+            delete payloadData[key]; 
+        }
     });
+
+    // 3. Masukkan kembali aksi dan username yang wajib ada
+    payloadData.aksi = "update_profil_siswa";
+    payloadData.username = nisn;
 
     const btnSimpan = document.querySelector("#editProfilSiswa button[type='submit']");
     if (btnSimpan) {
