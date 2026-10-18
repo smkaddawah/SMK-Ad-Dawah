@@ -21,14 +21,22 @@ async function loadPending() {
       tb.innerHTML = res.data.map(d => {
             let tombolFoto = (d.bukti && (String(d.bukti).startsWith('data:image') || String(d.bukti).startsWith('http'))) ? `<a href="${d.bukti}" target="_blank" class="btn btn-sm btn-outline-success fw-bold"><i class="fa-solid fa-image"></i> Foto</a>` : 'Tidak ada';
             
-            // Rahasiakan jika pelapornya siswa
-            let namaPelapor = (d.pelapor && d.pelapor.startsWith("[SISWA]")) ? "<i>Anonim</i>" : d.pelapor;
+            // ========================================================
+            // PERBAIKAN TAMPILAN NAMA PELAPOR (TERMASUK MASA LALU)
+            // ========================================================
+            let namaPelaporTampil = d.pelapor || "Sistem / Belum Jelas";
             
-            // Tanda jika siswa belum diketahui
-           // Tanda jika siswa atau kode belum diisi oleh Admin (null)
+            if (namaPelaporTampil.startsWith("[SISWA]")) {
+                // Di menu Admin, Admin akan melihat nama aslinya dicoret atau diberi info anonim
+                let namaAsli = namaPelaporTampil.replace("[SISWA]", "").trim();
+                namaPelaporTampil = `<span class="badge bg-secondary mb-1">Siswa Melapor</span><br><b>${namaAsli}</b>`;
+            } else if (namaPelaporTampil === "undefined" || namaPelaporTampil === "null") {
+                // Untuk laporan lama yang terlanjur Null
+                namaPelaporTampil = "Sistem";
+            }
+            // ========================================================
+            
             let isUnknown = (!d.nisn || !d.kode || d.kode === "TBD");
-            
-            // Supaya tidak error saat menampilkan kode yang null
             let tampilanKode = d.kode ? `${d.kode} - ${d.namaPelanggaran}` : "Menunggu Validasi Admin";
             let infoSiswa = isUnknown ? `<span class="text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation"></i> Siswa / Kasus Belum Jelas</span>` : `<b>${d.namaSiswa}</b><br><span class="badge bg-secondary">${d.kelas}</span> (${d.nisn})`;
 
@@ -37,7 +45,7 @@ async function loadPending() {
                 <td>${new Date(d.tanggal).toLocaleDateString('id-ID')}</td>
                 <td>${infoSiswa}</td>
                 <td><span class="badge bg-danger mb-1">${tampilanKode}</span><br><small class="text-muted">${d.keterangan}</small></td>
-                <td>${namaPelapor}</td>
+                <td>${namaPelaporTampil}</td>
                 <td>${tombolFoto}</td>
                 <td>
                 <div class="btn-group btn-group-sm">
@@ -57,6 +65,8 @@ async function loadPending() {
   }
 }
 
+// ================= FITUR APPROVE ALL (DENGAN PENGAMAN ANTI-BUG) =================
+// ================= FITUR APPROVE ALL (TANPA TAG HTML DI MODAL) =================
 async function setujuiSemuaLaporan() {
   showAlertBS("Memeriksa Antrean...", "Sedang mengambil daftar antrean terbaru dari server...", "info");
   
@@ -68,15 +78,46 @@ async function setujuiSemuaLaporan() {
       return;
     }
     
-    const daftarPending = res.data;
-    const jumlah = daftarPending.length;
+    const semuaPending = res.data;
 
-    showConfirmBS(`Apakah Anda yakin ingin menyetujui ${jumlah} laporan sekaligus? Poin seluruh siswa terkait akan otomatis bertambah!`, async () => {
+    // 1. Kumpulkan laporan yang SUDAH JELAS
+    const laporanSiap = semuaPending.filter(item => 
+        item.nisn && item.nisn !== "UNKNOWN" && item.nisn !== "null" && 
+        item.kode && item.kode !== "TBD" && item.kode !== "null"
+    );
+
+    // 2. Kumpulkan laporan yang BELUM JELAS
+    const laporanBelumJelas = semuaPending.filter(item => 
+        !item.nisn || item.nisn === "UNKNOWN" || item.nisn === "null" || 
+        !item.kode || item.kode === "TBD" || item.kode === "null"
+    );
+
+    // JIKA SEMUANYA BELUM JELAS, TOLAK PROSES!
+    if (laporanSiap.length === 0) {
+        showAlertBS(
+            "Tidak Bisa Disetujui Otomatis!", 
+            `Ada ${laporanBelumJelas.length} laporan dengan status Kasus Belum Jelas. Anda HARUS mengeditnya (klik tombol Pensil Biru) satu per satu.`, 
+            "warning"
+        );
+        return;
+    }
+
+    // =========================================================
+    // PERBAIKAN: PESAN KONFIRMASI MENGGUNAKAN PLAIN TEXT (TEKS BIASA)
+    // =========================================================
+    let pesanConfirm = `Apakah Anda yakin ingin menyetujui ${laporanSiap.length} laporan valid sekaligus?`;
+    
+    if (laporanBelumJelas.length > 0) {
+        pesanConfirm += `\n\nPERHATIAN: ${laporanBelumJelas.length} laporan "Belum Jelas" akan DILEWATI (tidak disetujui otomatis) karena harus Anda edit manual.`;
+    }
+    // =========================================================
+
+    showConfirmBS(pesanConfirm, async () => {
       
-      showAlertBS("Memproses...", `Sedang menyetujui ${jumlah} laporan secara otomatis...`, "info");
+      showAlertBS("Memproses...", `Sedang menyetujui ${laporanSiap.length} laporan yang sudah valid...`, "info");
       
       let sukses = 0;
-      for (let item of daftarPending) {
+      for (let item of laporanSiap) {
         let resVerif = await panggilAPI({ aksi: "verifikasi", idLog: item.idLog, keputusan: "Disetujui" });
         if (resVerif.status === "sukses") sukses++;
       }
@@ -86,7 +127,15 @@ async function setujuiSemuaLaporan() {
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
 
-      showAlertBS("Berhasil!", `Sebanyak ${sukses} dari ${jumlah} laporan antrean telah disetujui!`, "success");
+      if (laporanBelumJelas.length > 0) {
+          showAlertBS(
+              "Berhasil Sebagian!", 
+              `${sukses} laporan disetujui. Sisa ${laporanBelumJelas.length} laporan masih menunggu di antrean karena berstatus Kasus Belum Jelas.`, 
+              "success"
+          );
+      } else {
+          showAlertBS("Berhasil!", `Semua ${sukses} laporan antrean telah disetujui dengan aman!`, "success");
+      }
       
       loadPending();
       if (typeof loadStats === 'function') loadStats();
@@ -390,7 +439,7 @@ function aktifkanTampilanUser(res) {
         if (res.rawData) {
            const d = res.rawData;
            let tanggalMatang = d.tanggal_lahir ? String(d.tanggal_lahir).split('T')[0] : "";
-let tanggalTampil = d.tanggal_lahir ? new Date(d.tanggal_lahir).toLocaleDateString('id-ID') : "-";
+           let tanggalTampil = d.tanggal_lahir ? new Date(d.tanggal_lahir).toLocaleDateString('id-ID') : "-";
            
            if(document.getElementById("viewNisn")) document.getElementById("viewNisn").innerText = d.username || "-";
            if(document.getElementById("viewNama")) document.getElementById("viewNama").innerText = d.nama_lengkap || "-";
@@ -447,21 +496,35 @@ let tanggalTampil = d.tanggal_lahir ? new Date(d.tanggal_lahir).toLocaleDateStri
         
     } else if (res.role === "admin") {
         if(document.getElementById("adminSection")) document.getElementById("adminSection").style.display = "block";
-        
-        // --- PERBAIKAN 5: Pastikan fungsi penarik data kelas dipanggil saat Admin Login ---
         if(typeof loadFormDataMaster === 'function') loadFormDataMaster();
         if(typeof loadStats === 'function') loadStats();
         
     } else if (res.role === "walikelas") {
         if(document.getElementById("walikelasSection")) document.getElementById("walikelasSection").style.display = "block";
-        
-        // --- PERBAIKAN: Wajib panggil ini agar Dropdown Kelas & Data Form terisi ---
         if(typeof loadFormDataMaster === 'function') loadFormDataMaster();
         if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
         if(typeof initWaliKelas === 'function') initWaliKelas(res.kelas); 
     }
+    
     // 👇 Panggil saat user sukses masuk ke aplikasi
     daftarNotifikasiHP();
+
+    // ========================================================
+    // TUGAS BARU: MENGARAHKAN HALAMAN AWAL SAAT LOGIN (HOME)
+    // ========================================================
+    setTimeout(function() {
+        if (typeof bukaHalamanApp === 'function') {
+            if (res.role === "admin" || res.role === "Admin") {
+                bukaHalamanApp('admin_stats', 'Dashboard');
+            } else if (res.role === "siswa" || res.role === "Siswa") {
+                bukaHalamanApp('siswa_profil', 'Profil Saya'); // <--- Diperbaiki agar ID Menu sesuai
+            } else if (res.role === "guru" || res.role === "Guru") {
+                bukaHalamanApp('guru_profil', 'Profil & QR Code'); // <--- Diperbaiki agar ID Menu sesuai
+            } else if (res.role === "walikelas" || res.role === "Wali Kelas") {
+                bukaHalamanApp('wali_siswa', 'Data Siswa'); // <--- Diperbaiki agar ID Menu sesuai
+            }
+        }
+    }, 300);
 }
 
 function logout() {
@@ -595,6 +658,21 @@ function switchGuruTab(tab) {
     
     // 3. Pasang class active berdasarkan nama tab (bukan dari event klik)
     const targetEl = document.querySelector(`#guruTabs a[onclick*="${tab}"]`);
+    if (targetEl) targetEl.classList.add("active");
+}
+
+function switchWaliTab(tab) {
+    // 1. Reset semua class active di sidebar
+    document.querySelectorAll("#walikelasTabs .nav-link").forEach(el => el.classList.remove("active"));
+    
+    // 2. Sembunyikan atau tampilkan konten
+    if(document.getElementById("waliTabSiswa")) document.getElementById("waliTabSiswa").style.display = tab === 'siswa' ? 'block' : 'none';
+    if(document.getElementById("waliTabAbsensi")) document.getElementById("waliTabAbsensi").style.display = tab === 'absensi' ? 'block' : 'none';
+    if(document.getElementById("waliTabIzin")) document.getElementById("waliTabIzin").style.display = tab === 'izin' ? 'block' : 'none';
+    if(document.getElementById("waliTabEraport")) document.getElementById("waliTabEraport").style.display = tab === 'eraport' ? 'block' : 'none';
+    
+    // 3. Beri warna aktif pada menu yang diklik
+    const targetEl = document.querySelector(`#walikelasTabs a[onclick*="${tab}"]`);
     if (targetEl) targetEl.classList.add("active");
 }
 
@@ -781,8 +859,33 @@ async function kirimLaporan(e, idSuffix) {
   const btn = document.getElementById(`btnLapor_${idSuffix}`);
   btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Mengirim Laporan...';
   
+  // ========================================================
+  // PERBAIKAN: Format Nama Pelapor Anti-Null & Privasi
+  // ========================================================
+  let namaPelapor = "Sistem";
+  if (currentUser) {
+      let namaTampil = currentUser.nama_lengkap || currentUser.nama || currentUser.username || "User";
+      
+      // Berikan awalan "[SISWA]" jika dia siswa agar disensor oleh fungsi loadPending
+      if (currentUser.role === 'siswa' || currentUser.role === 'Siswa') {
+          namaPelapor = `[SISWA] ${namaTampil}`;
+      } else {
+          // Jika guru/admin/walikelas, tuliskan peran jabatannya (misal: "Budi (Guru)")
+          let roleTampil = (currentUser.role === 'walikelas') ? 'Wali Kelas' : currentUser.role;
+          namaPelapor = `${namaTampil} (${roleTampil.charAt(0).toUpperCase() + roleTampil.slice(1)})`;
+      }
+  }
+  // ========================================================
+
   // 3. Kirim data berupa Array 'arrNisn' ke API
-  const res = await panggilAPI({ aksi: "lapor", arrNisn: arrNisn, kode, keterangan, bukti, pelapor: currentUser.nama });
+  const res = await panggilAPI({ 
+      aksi: "lapor", 
+      arrNisn: arrNisn, 
+      kode, 
+      keterangan, 
+      bukti, 
+      pelapor: namaPelapor // <- Variabel yang sudah diperbaiki
+  });
   
   if (res.status === "sukses") {
       showAlertBS("Berhasil Terkirim!", `${arrNisn.length} Laporan berhasil masuk antrean verifikasi.`, "success");
@@ -3240,10 +3343,15 @@ const daftarMenuApp = {
     'guru_eraport': { judul: 'E-Raport', icon: 'fa-book-open', color: 'bg-primary' },
 
     // --- MENU WALI KELAS ---
+    'guru_profil': { judul: 'Profil & QR', icon: 'fa-qrcode', color: 'bg-primary' },
+    'guru_logabsen': { judul: 'Log Absen', icon: 'fa-calendar-check', color: 'bg-success' },
+    'guru_lapor': { judul: 'Form Lapor', icon: 'fa-pen-to-square', color: 'bg-danger' },
+    'guru_eraport': { judul: 'E-Raport', icon: 'fa-book-open', color: 'bg-primary' },
     'wali_siswa': { judul: 'Data Kelas', icon: 'fa-users', color: 'bg-primary' },
     'wali_absensi': { judul: 'Absen Kelas', icon: 'fa-calendar-days', color: 'bg-info text-white' },
     'wali_izin': { judul: 'Antrean Izin', icon: 'fa-list-check', color: 'bg-warning text-dark' },
     'wali_eraport': { judul: 'Cetak Rapor', icon: 'fa-print', color: 'bg-success' },
+
 };
 
 // 2. PEMBAGIAN HAK AKSES MENU SESUAI ROLE
@@ -3540,16 +3648,28 @@ function bukaHalamanApp(idMenu, judul) {
 
     if (idMenu === 'admin_broadcast') {
         new bootstrap.Modal(document.getElementById('modalBroadcast')).show();
-        return; // Hentikan eksekusi di sini agar tidak pindah ke halaman lain
+        return; 
     }
 
     if (idMenu === 'admin_rfid') {
         bukaModalRFID();
         return;
     }
+
+    // --- PERBAIKAN ANIMASI MENU (LATAR HIJAU) ---
+    document.querySelectorAll('.sidebar-menu-item').forEach(el => {
+        el.classList.remove('active', 'bg-success', 'text-white');
+    });
+    let menuDiklik = document.querySelector(`.sidebar-menu-item[onclick*="${idMenu}"]`);
+    if (menuDiklik) {
+        menuDiklik.classList.add('active', 'bg-success', 'text-white');
+    }
+    // -----------------------------------------------
+
     document.getElementById("mobileAppDashboard").style.display = "none";
     document.getElementById("halamanFiturApp").style.display = "block";
-    document.getElementById("judulHalamanFitur").innerText = judul.toUpperCase();
+    
+    if(judul) document.getElementById("judulHalamanFitur").innerText = judul.toUpperCase();
     
     const wadah = document.getElementById("wadahKontenFitur");
     const gudang = document.getElementById("gudangKonten");
@@ -3571,11 +3691,9 @@ function bukaHalamanApp(idMenu, judul) {
             else if(tabName === 'absensi') idTabHtml = 'tabAbsensi';
             else if(tabName === 'cetakqr') {
                 idTabHtml = 'tabCetakQR';
-                // Ubah Teks Dropdown secara otomatis!
                 let optGuru = document.querySelector('#cetakQrKategori option[value="guru"]');
                 if(optGuru) optGuru.innerText = "Seluruh Guru & Wali Kelas";
             }
-
             else if(tabName === 'eraport') {
                 idTabHtml = 'tabAdminEraport';
                 if(typeof loadPengaturanEraport === 'function') loadPengaturanEraport();
@@ -3584,23 +3702,30 @@ function bukaHalamanApp(idMenu, judul) {
         } 
         else if (idMenu.startsWith('siswa_')) {
             let tabName = idMenu.replace('siswa_', '');
-            if(tabName === 'profil') idTabHtml = 'siswaTabProfil';
+            if(tabName === 'profil') {
+                idTabHtml = 'siswaTabProfil';
+                // 👇 PEMANGGILAN ANTI-CRASH 👇
+                if(typeof muatProfilUlang === 'function') muatProfilUlang();
+            }
             else if(tabName === 'logabsen') idTabHtml = 'siswaTabLogAbsen';
             else if(tabName === 'pelanggaran') idTabHtml = 'siswaTabPelanggaran';
             else if(tabName === 'izin') idTabHtml = 'siswaTabIzin';
             else if(tabName === 'lapor') idTabHtml = 'siswaTabLapor';
-            else if (idMenu === 'siswa_poin') { 
-    idTabHtml = 'siswaTabPoin'; 
-    loadCekPoinSiswa(); // Panggil fungsi penarik poin saat menu diklik!
-}
+            else if (tabName === 'poin') { 
+                idTabHtml = 'siswaTabPoin'; 
+                if(typeof loadCekPoinSiswa === 'function') loadCekPoinSiswa(); 
+            }
             if (typeof switchSiswaTab === 'function') switchSiswaTab(tabName);
         }
         else if (idMenu.startsWith('guru_')) {
             let tabName = idMenu.replace('guru_', '');
-            if(tabName === 'profil') { idTabHtml = 'guruTabProfil'; renderQRGuruMobile(); }
+            if(tabName === 'profil') { 
+                idTabHtml = 'guruTabProfil'; 
+                if(typeof renderQRGuruMobile === 'function') renderQRGuruMobile(); 
+            }
             else if(tabName === 'logabsen') { 
                 idTabHtml = 'guruTabLogAbsen'; 
-                loadLogAbsenGuruMobile(); // HUBUNGKAN TAB LOG ABSEN GURU KE SINI!
+                if(typeof loadLogAbsenGuruMobile === 'function') loadLogAbsenGuruMobile(); 
             }
             else if(tabName === 'lapor') idTabHtml = 'guruTabLapor';
             else if(tabName === 'eraport') { 
@@ -3620,7 +3745,9 @@ function bukaHalamanApp(idMenu, judul) {
             }
             if (typeof switchWaliTab === 'function') switchWaliTab(tabName);
         }
-    } catch (error) {}
+    } catch (error) {
+        console.error("Error Navigasi: ", error);
+    }
 
     const elemenTab = document.getElementById(idTabHtml);
     if (elemenTab) {
@@ -3628,6 +3755,7 @@ function bukaHalamanApp(idMenu, judul) {
         wadah.appendChild(elemenTab);
     }
 }
+
 
 
 
@@ -3743,115 +3871,209 @@ async function cekSmartAlert(role) {
 // =====================================================================
 // LOGIKA UTAMA: TARIK DATA & TAMPILKAN HALAMAN CEK POIN SISWA
 // =====================================================================
+// ========================================================
+// SCRIPT RIWAYAT POIN (DENGAN KOLOM PELAPOR & BUKTI FOTO)
+// ========================================================
 async function loadCekPoinSiswa() {
     if (!currentUser) return;
-    
-    // Ambil identitas siswa yang sedang login (NISN / Username)
-    let nisnSiswa = String(currentUser.identitas || currentUser.username).replace(/'/g, "").trim();
-    
-    // Set Nama & Kelas di Header
-    document.getElementById('poinNamaSiswa').innerText = currentUser.nama_lengkap || currentUser.nama || "Siswa";
-    document.getElementById('poinNisnKelas').innerText = `NISN: ${nisnSiswa} | Kelas: ${currentUser.kelas || '-'}`;
-    
-    let inisial = (currentUser.nama_lengkap || currentUser.nama || "S").charAt(0).toUpperCase();
-    document.getElementById('poinInisial').innerHTML = `<b class="text-white">${inisial}</b>`;
-    
-    // Reset tampilan awal
-    document.getElementById('angkaTotalPoin').innerText = "0";
-    document.getElementById('progressBarPoin').style.width = "0%";
-    document.getElementById('badgeStatusSp').innerText = "AMAN";
-    document.getElementById('badgeStatusSp').className = "badge bg-white text-success fw-bold px-3 py-1.5 rounded-pill shadow-sm";
-    
-    let wadahRiwayat = document.getElementById('kontenRiwayatPoinSiswa');
-    wadahRiwayat.innerHTML = `
-        <div class="spinner-border text-success mb-2" role="status"></div>
-        <p class="text-muted small m-0">Memuat data poin Anda...</p>
-    `;
+
+    let nisnAsli = currentUser.username || "0000000000";
+    let nisnSensor = nisnAsli.length > 5 ? nisnAsli.substring(0, 3) + "***" + nisnAsli.substring(nisnAsli.length - 1) : nisnAsli;
+
+    document.getElementById("uiPoinNama").innerText = currentUser.nama_lengkap || currentUser.nama || "SISWA";
+    document.getElementById("uiPoinNisn").innerText = nisnSensor;
+    document.getElementById("uiPoinKelas").innerText = currentUser.kelas || "-";
 
     try {
-        // Ambil data log pelanggaran siswa ini yang statusnya 'Disetujui' dari Supabase
-        const { data: listPoin, error } = await supabaseClient
+        const { data, error } = await supabaseClient
             .from('log_pelanggaran')
-            .select('*')
-            .eq('status', 'Disetujui');
-            
+            .select('*, kamus_pelanggaran(jenis_pelanggaran)')
+            .eq('nisn', currentUser.username)
+            .eq('status', 'Disetujui')
+            .order('tanggal', { ascending: false });
+
+        let totalPoin = 0;
+        let tbody = document.getElementById("uiPoinTabelData");
+        tbody.innerHTML = "";
+
         if (error) throw error;
-        
-        // Filter manual berdasarkan NISN yang cocok (untuk mengantisipasi perbedaan format titik/petik)
-        let pelanggaranKu = [];
-        let totalPoinSaya = 0;
-        
-        if (listPoin) {
-            pelanggaranKu = listPoin.filter(p => {
-                let dbNisn = String(p.nisn || '').split('.')[0].trim();
-                return dbNisn === nisnSiswa;
+
+        if (data && data.length > 0) {
+            data.forEach(p => {
+                let poin = parseInt(p.poin) || 0;
+                totalPoin += poin;
+
+                let tgl = new Date(p.tanggal).toLocaleDateString('sv-SE');
+                let kode = p.kode_pelanggaran || "-";
+                let ket = p.keterangan || (p.kamus_pelanggaran ? p.kamus_pelanggaran.jenis_pelanggaran : "-");
+                
+                // --- LOGIKA PRIVASI PELAPOR ---
+                let namaPelapor = p.pelapor || "Sistem";
+                if (namaPelapor.startsWith("[SISWA]")) {
+                    namaPelapor = "Siswa (Dirahasiakan)"; // Disensor dari pandangan siswa!
+                }
+                
+                // --- TOMBOL BUKTI FOTO ---
+                let linkBukti = p.bukti_link || p.bukti; // Menyesuaikan nama kolom DB Anda
+                let tombolBukti = (linkBukti && (linkBukti.startsWith('data:') || linkBukti.startsWith('http'))) 
+                    ? `<a href="${linkBukti}" target="_blank" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-image"></i></a>` 
+                    : `<span class="text-muted small">-</span>`;
+
+                tbody.innerHTML += `
+                <tr>
+                    <td class="fw-bold text-dark ps-3 py-3">${tgl}</td>
+                    <td><span class="badge-soft-danger">+${poin}</span> <small class="text-muted ms-1">${kode}</small></td>
+                    <td class="text-secondary fw-semibold text-truncate" style="max-width: 200px;">${ket}</td>
+                    <td class="text-secondary small fw-bold">${namaPelapor}</td>
+                    <td class="text-center">${tombolBukti}</td>
+                </tr>`;
             });
-            
-            totalPoinSaya = pelanggaranKu.reduce((sum, item) => sum + (Number(item.poin) || 0), 0);
-        }
-        
-        // Render Total Poin & Progress Bar (Maksimal skala 100 untuk persentase bar)
-        document.getElementById('angkaTotalPoin').innerText = totalPoinSaya;
-        let persentase = Math.min((totalPoinSaya / 100) * 100, 100);
-        document.getElementById('progressBarPoin').style.width = persentase + "%";
-        
-        // Tentukan Status SP / Aman
-        let badgeEl = document.getElementById('badgeStatusSp');
-        let cardBg = document.querySelector('.card.bg-success');
-        
-        if (totalPoinSaya >= 100) {
-            badgeEl.innerText = "KRITIS (SP 3)";
-            badgeEl.className = "badge bg-white text-danger fw-bold px-3 py-1.5 rounded-pill shadow-sm";
-            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #dc3545 0%, #ff4d4d 100%)"; // Berubah jadi merah jika kritis
-        } else if (totalPoinSaya >= 75) {
-            badgeEl.innerText = "SP 2";
-            badgeEl.className = "badge bg-white text-warning fw-bold px-3 py-1.5 rounded-pill shadow-sm";
-            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #fd7e14 0%, #ffc107 100%)";
-        } else if (totalPoinSaya >= 50) {
-            badgeEl.innerText = "SP 1";
-            badgeEl.className = "badge bg-white text-warning fw-bold px-3 py-1.5 rounded-pill shadow-sm";
-            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #ffc107 0%, #fd7e14 100%)";
         } else {
-            badgeEl.innerText = "AMAN";
-            badgeEl.className = "badge bg-white text-success fw-bold px-3 py-1.5 rounded-pill shadow-sm";
-            if(cardBg) cardBg.style.background = "linear-gradient(135deg, #198754 0%, #20c997 100%)";
-        }
-        
-        // Render Tabel / Daftar Riwayat Pelanggaran di sebelah kanan
-        if (pelanggaranKu.length === 0) {
-            wadahRiwayat.innerHTML = `
-                <div class="text-success mb-2" style="font-size: 2.5rem;">
-                    <i class="fa-solid fa-shield-heart"></i>
-                </div>
-                <h5 class="fw-bold text-dark mb-1">Berperilaku Sangat Baik!</h5>
-                <p class="text-muted small m-0">TIDAK ADA CATATAN PELANGGARAN TERDETEKSI.</p>
-            `;
-        } else {
-            let htmlList = `<div class="table-responsive w-100" style="max-height: 240px; overflow-y: auto;">
-                <table class="table table-sm table-hover align-middle text-start mb-0" style="font-size: 0.8rem;">
-                    <thead class="table-light">
-                        <tr><th>Tanggal</th><th>Kode</th><th>Poin</th><th>Keterangan</th></tr>
-                    </thead>
-                    <tbody>`;
-            
-            pelanggaranKu.forEach(p => {
-                let tglOnly = (p.tanggal || '').split('T')[0];
-                htmlList += `
-                    <tr>
-                        <td class="fw-bold">${tglOnly}</td>
-                        <td><span class="badge bg-danger">${p.kode_pelanggaran || '-'}</span></td>
-                        <td><span class="fw-bold text-danger">+${p.poin}</span></td>
-                        <td class="text-truncate" style="max-width: 150px;" title="${p.keterangan || ''}">${p.keterangan || '-'}</td>
-                    </tr>`;
-            });
-            
-            htmlList += `</tbody></table></div>`;
-            wadahRiwayat.innerHTML = htmlList;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5"><i class="fa-regular fa-face-smile-beam text-success fs-1 mb-3 opacity-50"></i><h5 class="fw-bold text-success mb-0">Luar Biasa!</h5><p class="text-muted small">Anda tidak memiliki catatan pelanggaran.</p></td></tr>`;
         }
 
+        // UPDATE KARTU KIRI (Sama seperti sebelumnya)
+        document.getElementById("uiPoinTotal").innerText = totalPoin;
+        let statusSP = "Aman"; let barColor = "bg-white";
+        if (totalPoin >= 100) { statusSP = "SP 3"; barColor = "bg-danger"; }
+        else if (totalPoin >= 75) { statusSP = "SP 2"; barColor = "bg-warning"; }
+        else if (totalPoin >= 50) { statusSP = "SP 1"; barColor = "bg-warning"; }
+        
+        document.getElementById("uiPoinSp").innerText = statusSP;
+        let barProgress = document.getElementById("uiPoinBar");
+        setTimeout(() => {
+            barProgress.style.width = (totalPoin > 100 ? 100 : totalPoin) + "%";
+            if(totalPoin >= 50) { barProgress.classList.remove("bg-white"); barProgress.classList.add(barColor); }
+        }, 300);
+
     } catch (err) {
-        console.error("Gagal meload poin siswa:", err);
-        wadahRiwayat.innerHTML = `<p class="text-danger small m-0">Gagal memuat riwayat pelanggaran.</p>`;
+        document.getElementById("uiPoinTabelData").innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Gagal memuat data.</td></tr>`;
+    }
+}
+
+// ========================================================
+// FUNGSI UNTUK MENGISI PROFIL SISWA SECARA REAL-TIME DARI DB
+// ========================================================
+async function muatProfilUlang() {
+    if (!currentUser || !currentUser.username) return;
+    
+    // Beri efek "Memuat..." sebentar agar terlihat profesional
+    if(document.getElementById("txtNamaProfilSiswa")) {
+        document.getElementById("txtNamaProfilSiswa").innerText = "Memuat data...";
+    }
+
+    try {
+        // 1. TARIK DATA LANGSUNG DARI DATABASE (SELECT * FROM USERS)
+        // Ini memastikan semua kolom (agama, nama_ayah, dll) pasti ditarik.
+        const { data: dbUser, error } = await supabaseClient
+            .from('users')
+            .select('*')
+            .eq('username', currentUser.username)
+            .single();
+
+        if (error) throw error;
+
+        // 2. Update Cache Lokal (Agar sinkron dengan data terbaru)
+        currentUser.rawData = dbUser;
+        currentUser.nama_lengkap = dbUser.nama_lengkap;
+        currentUser.foto_profil = dbUser.foto_profil;
+        currentUser.kelas = dbUser.kelas;
+        localStorage.setItem("sesi_addawah", JSON.stringify(currentUser));
+
+        // Gunakan data segar dari database
+        const d = dbUser; 
+
+        // Fungsi Helper untuk render
+        const setTeks = (id, val) => { 
+            if(document.getElementById(id)) {
+                document.getElementById(id).innerText = (val !== undefined && val !== null && val !== "") ? val : "-"; 
+            }
+        };
+        const setNilai = (id, val) => { 
+            if(document.getElementById(id)) {
+                document.getElementById(id).value = (val !== undefined && val !== null) ? val : ""; 
+            }
+        };
+
+        // 3. Tentukan Nama Lengkap
+        let namaLengkap = d.nama_lengkap || d.username;
+        
+        // 4. Render Foto Profil (Asli atau UI-Avatars)
+        const imgEl = document.getElementById("imgProfilSiswa");
+        if (imgEl) {
+            if (d.foto_profil && d.foto_profil.trim() !== "") {
+                imgEl.src = d.foto_profil; 
+            } else {
+                imgEl.src = `https://ui-avatars.com/api/?name=${namaLengkap.replace(/\s/g, '+')}&background=198754&color=fff&size=200`;
+            }
+        }
+
+        // 5. Header Profil Singkat
+        setTeks("txtNamaProfilSiswa", namaLengkap);
+        setTeks("txtNisnProfilSiswa", d.username);
+        setTeks("txtKelasProfilSiswa", d.kelas);
+
+        // 6. Accordion Profil (Sesuai Kolom SQL Anda)
+        setTeks("viewNisn", d.username);
+        setTeks("viewNama", namaLengkap);
+        setTeks("viewKelas", d.kelas);
+        
+        let jkTampil = "-";
+        if (d.jenis_kelamin === 'L' || d.jenis_kelamin === 'Laki-Laki') jkTampil = 'Laki-Laki';
+        else if (d.jenis_kelamin === 'P' || d.jenis_kelamin === 'Perempuan') jkTampil = 'Perempuan';
+        setTeks("viewJk", jkTampil);
+        
+        setTeks("viewTempatLahir", d.tempat_lahir);
+        
+        let tglMatang = "";
+        let tglTampil = "-";
+        if (d.tanggal_lahir && d.tanggal_lahir !== "null") {
+            tglMatang = String(d.tanggal_lahir).split('T')[0];
+            tglTampil = new Date(tglMatang).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        setTeks("viewTglLahir", tglTampil);
+        
+        setTeks("viewAgama", d.agama);
+        setTeks("viewNoHp", d.no_hp);
+        setTeks("viewEmail", d.email);
+        setTeks("viewAlamat", d.alamat);
+        setTeks("viewNamaAyah", d.nama_ayah);
+        setTeks("viewHpAyah", d.no_hp_ayah);
+        setTeks("viewNamaIbu", d.nama_ibu);
+        setTeks("viewHpIbu", d.no_hp_ibu);
+
+        // 7. Form Edit (Isian Input untuk diedit)
+        setNilai("profNisn", d.username);
+        setNilai("profNama", namaLengkap);
+        setNilai("profKelas", d.kelas);
+        
+        let selJk = document.getElementById("profJk");
+        if(selJk) {
+            if(d.jenis_kelamin === 'L' || d.jenis_kelamin === 'Laki-Laki') selJk.value = 'L';
+            else if (d.jenis_kelamin === 'P' || d.jenis_kelamin === 'Perempuan') selJk.value = 'P';
+            else selJk.value = '';
+        }
+
+        setNilai("profTempatLahir", d.tempat_lahir);
+        setNilai("profTglLahir", tglMatang);
+        
+        let selAgama = document.getElementById("profAgama");
+        if(selAgama) {
+            let options = Array.from(selAgama.options).map(opt => opt.value);
+            if (options.includes(d.agama)) selAgama.value = d.agama;
+            else selAgama.value = '';
+        }
+
+        setNilai("profNoHp", d.no_hp);
+        setNilai("profEmail", d.email);
+        setNilai("profAlamat", d.alamat);
+        setNilai("profNamaAyah", d.nama_ayah);
+        setNilai("profHpAyah", d.no_hp_ayah);
+        setNilai("profNamaIbu", d.nama_ibu);
+        setNilai("profHpIbu", d.no_hp_ibu);
+
+    } catch (err) {
+        console.error("Gagal menarik data dari database: ", err);
     }
 }
 
@@ -5674,51 +5896,142 @@ function kirimBroadcastAdmin() {
     }, 800);
 }
 
-// ================= FITUR REGISTRASI RFID =================
+// ========================================================
+// FUNGSI UTAMA MEMBUKA MODAL RFID
+// ========================================================
 async function bukaModalRFID() {
-    const modal = new bootstrap.Modal(document.getElementById('modalRFID'));
+    let modalEl = document.getElementById('modalRFID');
+    if (!modalEl) return;
+
+    // Tampilkan modal
+    const modal = new bootstrap.Modal(modalEl);
     modal.show();
     
+    // 1. Muat dulu daftar kelas secara dinamis dari database
+    await muatDropdownKelasRFID();
+    
+    // 2. Baru muat nama-nama siswanya
     await muatDataUserRFID();
     
-    document.getElementById('modalRFID').addEventListener('shown.bs.modal', function () {
-        document.getElementById('rfidInputModal').focus();
+    // 3. Fokuskan kursor ke input scanner saat modal selesai terbuka
+    modalEl.addEventListener('shown.bs.modal', function () {
+        let inputScanner = document.getElementById('rfidInputModal');
+        if(inputScanner) inputScanner.focus();
     }, { once: true });
 }
 
-// Tambahkan event listener agar data berubah saat filter diganti
-document.getElementById('filterKelasRFID').addEventListener('change', muatDataUserRFID);
+// ========================================================
+// FITUR BARU: MENGAMBIL KELAS OTOMATIS DARI DATABASE
+// ========================================================
+async function muatDropdownKelasRFID() {
+    const filterEl = document.getElementById('filterKelasRFID');
+    if (!filterEl) return;
 
-async function muatDataUserRFID() {
-    const kelasDipilih = document.getElementById('filterKelasRFID').value;
+    // Tarik semua data 'kelas' dari siswa di tabel users
+    const { data, error } = await supabaseClient
+        .from('users')
+        .select('kelas')
+        .eq('role', 'siswa')
+        .not('kelas', 'is', null);
+
+    if (error) {
+        console.error("Gagal memuat daftar kelas:", error);
+        return;
+    }
+
+    // Filter agar tidak ada nama kelas yang duplikat (menggunakan Set)
+    const kelasUnik = [...new Set(data.map(item => item.kelas))].sort();
+
+    // Kosongkan dan isi ulang dropdown dengan data kelas dari Supabase
+    filterEl.innerHTML = '<option value="">-- Semua Kelas --</option>';
+    kelasUnik.forEach(kls => {
+        if(kls.trim() !== '') {
+            filterEl.innerHTML += `<option value="${kls}">${kls}</option>`;
+        }
+    });
+}
+
+// ========================================================
+// LOGIKA KATEGORI PTK & SISWA (Sama seperti sebelumnya)
+// ========================================================
+function ubahKategoriRFID() {
+    const kategori = document.getElementById('kategoriRFID').value;
+    const wadahKelas = document.getElementById('wadahKelasRFID');
     
-    // Siapkan query dasar
+    if (kategori === 'ptk') {
+        if(wadahKelas) wadahKelas.style.display = 'none';
+        let filterKelas = document.getElementById('filterKelasRFID');
+        if(filterKelas) filterKelas.value = ''; 
+    } else {
+        if(wadahKelas) wadahKelas.style.display = 'block';
+    }
+    
+    muatDataUserRFID();
+}
+
+// ========================================================
+// FUNGSI MENARIK DATA PTK/SISWA YANG SANGAT KETAT
+// ========================================================
+async function muatDataUserRFID() {
+    const filterEl = document.getElementById('filterKelasRFID');
+    const kelasDipilih = filterEl ? filterEl.value : '';
+    
+    const kategoriEl = document.getElementById('kategoriRFID');
+    const kategoriDipilih = kategoriEl ? kategoriEl.value : 'siswa'; 
+    
+    // Kita bangun query Supabase dari awal
     let query = supabaseClient
         .from('users')
         .select('username, nama_lengkap, role, kelas, rfid_uid')
         .order('nama_lengkap', { ascending: true });
 
-    // Terapkan filter jika ada kelas yang dipilih
-    if (kelasDipilih !== '') {
-        query = query.eq('kelas', kelasDipilih);
+    // PENGUNCIAN LOGIKA YANG KETAT
+    if (kategoriDipilih === 'ptk') {
+        // HANYA tarik yang role-nya guru, walikelas, admin
+        // Abaikan isi kolom 'kelas' (meskipun walikelas punya isi di kolom kelas)
+        query = query.in('role', ['guru', 'walikelas', 'admin']);
+    } else {
+        // HANYA tarik yang role-nya siswa
+        query = query.eq('role', 'siswa');
+        
+        // JIKA admin memilih spesifik kelas tertentu
+        if (kelasDipilih !== '') {
+            query = query.eq('kelas', kelasDipilih);
+        }
     }
 
     const { data, error } = await query;
 
     if (error) {
-        tampilkanAlertRFID('Gagal memuat data user!', 'danger');
+        if(typeof tampilkanAlertRFID === 'function') tampilkanAlertRFID('Gagal memuat data user!', 'danger');
         return;
     }
 
     const userSelect = document.getElementById('userSelectRFID');
+    if (!userSelect) return; 
+    
     userSelect.innerHTML = '<option value="">-- Pilih Nama --</option>';
     
     data.forEach(user => {
-        const infoTambahan = user.role === 'siswa' && user.kelas ? ` - ${user.kelas}` : ` - ${user.role}`;
+        let infoTambahan = '';
+        if (user.role === 'siswa') {
+            infoTambahan = user.kelas ? ` - ${user.kelas}` : '';
+        } else {
+            let roleTampil = user.role.toUpperCase();
+            if(user.role === 'walikelas') roleTampil = 'WALI KELAS';
+            // Walaupun walikelas punya atribut kelas, kita hanya tampilkan "WALI KELAS" untuk kerapian
+            infoTambahan = ` - ${roleTampil}`;
+        }
+
         const statusKartu = user.rfid_uid ? ' (✅ Punya Kartu)' : '';
         userSelect.innerHTML += `<option value="${user.username}">${user.nama_lengkap}${infoTambahan}${statusKartu}</option>`;
     });
 }
+
+// Tambahkan event listener agar data berubah saat filter diganti
+document.getElementById('filterKelasRFID').addEventListener('change', muatDataUserRFID);
+
+
 
 document.getElementById('rfidInputModal').addEventListener('keydown', async function(e) {
     if (e.key === 'Enter') {

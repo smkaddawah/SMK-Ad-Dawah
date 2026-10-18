@@ -203,3 +203,55 @@ h4, h5, .modal-title {
     font-size: 1.1rem;
     font-weight: 600;
 }
+
+/* ========================================================
+   SIDEBAR KHUSUS DESKTOP (TAMPILAN LAPTOP)
+   ======================================================== */
+.desktop-sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 260px;
+    height: 100vh;
+    background: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    z-index: 1050;
+    overflow-y: auto;
+    padding-bottom: 20px;
+}
+
+.sidebar-menu-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    margin: 4px 15px;
+    border-radius: 8px;
+    color: #495057;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+.sidebar-menu-item:hover { background: #f8f9fa; color: #198754; }
+.sidebar-menu-item.active { background: #e6f4ea; color: #198754; font-weight: 700; }
+.sidebar-menu-item i { width: 35px; font-size: 1.1rem; text-align: center; }
+
+@media (min-width: 992px) {
+    /* 1. Sembunyikan Navigasi Bawah HP (#bottomNavBar) di Laptop */
+    #bottomNavBar { display: none !important; }
+    
+    /* 2. SEMBUNYIKAN MENU GELEMBUNG DI TENGAH LAYAR */
+    .menu-icon-box { display: none !important; }
+    
+    /* 3. Geser area utama (Dashboard) ke kanan agar tidak tertutup sidebar */
+    body { padding-left: 260px !important; }
+}
+
+@media (max-width: 991px) {
+    /* Sembunyikan Sidebar Desktop ini jika dibuka di HP */
+    .desktop-sidebar { display: none !important; }
+}
+
+#uiPoinTabelData tr { border-bottom: 1px solid #f3f4f6; transition: background-color 0.2s; }
+    #uiPoinTabelData tr:hover { background-color: #fafdfb; }
+    #uiPoinTabelData tr:last-child { border-bottom: none; }
+    .badge-soft-danger { background-color: #fee2e2; color: #dc2626; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; }
