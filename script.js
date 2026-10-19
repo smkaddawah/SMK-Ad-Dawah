@@ -1728,26 +1728,159 @@ function bukaModalGuru(mode, nip = '', nama = '', role = 'guru', kelas = '', pwd
     modalGuruInstance.show();
 }
 
+// ========================================================
+// STATE GLOBAL UNTUK TABEL GURU (PAGINATION & FILTER)
+// ========================================================
+let masterDataGuru = [];
+let currentPageGuru = 1;
+let itemsPerPageGuru = 10; // Jumlah data per halaman (Bisa Anda ubah, misal 8 atau 12)
+
+// ========================================================
+// FUNGSI LOAD DATA AWAL DARI DATABASE
+// ========================================================
 async function loadAllGuru() {
     const tb = document.getElementById("tbAllGuru");
-    tb.innerHTML = "<tr><td colspan='5' class='text-center py-3'><i class='fa-solid fa-spinner fa-spin'></i> Memuat data...</td></tr>";
+    tb.innerHTML = "<tr><td colspan='5' class='text-center py-5'><i class='fa-solid fa-spinner fa-spin fs-3 text-primary mb-3'></i><br><span class='text-muted'>Menarik data dari server...</span></td></tr>";
     
     const res = await panggilAPI({ aksi: "get_all_guru" });
-    if (res.status === "sukses" && res.data.length > 0) {
-        tb.innerHTML = res.data.map(g => `
-            <tr>
-                <td><b>${g.username}</b></td>
-                <td>${g.nama_lengkap}</td>
-                <td><span class="badge bg-${g.role === 'walikelas' ? 'success' : 'primary'}">${g.role === 'walikelas' ? 'Wali Kelas' : 'Guru'}</span></td>
-                <td>${g.role === 'walikelas' ? `<span class="badge bg-secondary">${g.kelas}</span>` : '-'}</td>
+    if (res.status === "sukses" && res.data) {
+        masterDataGuru = res.data;
+        
+        // PENGURUTAN (SORTING) OTOMATIS: 
+        // 1. Guru di atas, Wali Kelas di bawah
+        // 2. Jika perannya sama, urutkan Abjad A-Z berdasarkan Nama
+        masterDataGuru.sort((a, b) => {
+            if (a.role === 'guru' && b.role === 'walikelas') return -1;
+            if (a.role === 'walikelas' && b.role === 'guru') return 1;
+            return a.nama_lengkap.localeCompare(b.nama_lengkap);
+        });
+
+        currentPageGuru = 1; // Reset ke halaman 1
+        renderTabelGuru();
+    } else {
+        masterDataGuru = [];
+        renderTabelGuru();
+    }
+}
+
+// Trigger saat input pencarian atau dropdown diubah
+function filterDataGuru() {
+    currentPageGuru = 1; // Kembali ke halaman pertama saat filter berubah
+    renderTabelGuru();
+}
+
+// Fungsi Pindah Halaman
+function gantiPageGuru(newPage) {
+    currentPageGuru = newPage;
+    renderTabelGuru();
+}
+
+// ========================================================
+// MESIN RENDER TABEL (FILTERING, PAGINATION, HTML UI)
+// ========================================================
+function renderTabelGuru() {
+    const tb = document.getElementById("tbAllGuru");
+    if(!tb) return;
+
+    // 1. Ambil nilai filter
+    const searchKw = document.getElementById("searchGuru") ? document.getElementById("searchGuru").value.toLowerCase() : "";
+    const roleFilter = document.getElementById("filterRoleGuru") ? document.getElementById("filterRoleGuru").value : "all";
+
+    // 2. Eksekusi Filter Data
+    let filteredData = masterDataGuru.filter(g => {
+        let textPencarian = (g.nama_lengkap + " " + g.username + " " + (g.kelas || "")).toLowerCase();
+        let matchSearch = textPencarian.includes(searchKw);
+        let matchRole = (roleFilter === "all") || (g.role === roleFilter);
+        return matchSearch && matchRole;
+    });
+
+    // 3. Kalkulasi Paginasi (Pembagian Halaman)
+    let totalItems = filteredData.length;
+    let totalPages = Math.ceil(totalItems / itemsPerPageGuru) || 1;
+    
+    if (currentPageGuru > totalPages) currentPageGuru = totalPages;
+    if (currentPageGuru < 1) currentPageGuru = 1;
+
+    let startIndex = (currentPageGuru - 1) * itemsPerPageGuru;
+    let endIndex = startIndex + itemsPerPageGuru;
+    let paginatedData = filteredData.slice(startIndex, endIndex); // Potong data sesuai halaman
+
+    // 4. Render HTML Tabel
+    if (paginatedData.length > 0) {
+        tb.innerHTML = paginatedData.map((g, index) => {
+            let actualIndex = startIndex + index + 1;
+            let isWali = g.role === 'walikelas';
+            
+            // Badge UI ala Modern Enterprise
+            let badgeRole = isWali 
+                ? `<span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill fw-bold" style="font-size:0.75rem;"><i class="fa-solid fa-user-tie me-1"></i>Wali Kelas</span>`
+                : `<span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-bold" style="font-size:0.75rem;"><i class="fa-solid fa-chalkboard-user me-1"></i>Guru</span>`;
+            
+            let badgeKelas = isWali && g.kelas
+                ? `<span class="badge bg-light text-secondary border px-3 py-2 rounded-pill fw-bold" style="font-size:0.75rem;">${g.kelas}</span>`
+                : `<span class="text-muted">-</span>`;
+
+            // Style baris tabel dengan border tipis di bawah
+            return `
+            <tr style="border-bottom: 1px solid #f8f9fa; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#fcfcfc'" onmouseout="this.style.backgroundColor='transparent'">
+                <td class="text-muted fw-bold ps-3">${actualIndex.toString().padStart(2, '0')}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-info me-1" onclick="bukaModalGuru('edit', '${g.username}', '${g.nama_lengkap}', '${g.role}', '${g.kelas || ''}', '${g.password}')"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="hapusGuru('${g.username}')"><i class="fa-solid fa-trash"></i></button>
+                    <div class="fw-bold text-dark mb-0">${g.nama_lengkap}</div>
+                    <div class="text-muted small" style="font-size: 0.75rem; letter-spacing: 0.5px;">NIP: ${g.username}</div>
+                </td>
+                <td>${badgeRole}</td>
+                <td>${badgeKelas}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-primary rounded-circle border-0 me-1" style="width: 32px; height: 32px; padding: 0; background-color: #f0f7ff;" onclick="bukaModalGuru('edit', '${g.username}', '${g.nama_lengkap}', '${g.role}', '${g.kelas || ''}', '${g.password}')" title="Edit">
+                        <i class="fa-solid fa-pen" style="font-size: 0.8rem;"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger rounded-circle border-0" style="width: 32px; height: 32px; padding: 0; background-color: #fff0f0;" onclick="hapusGuru('${g.username}')" title="Hapus">
+                        <i class="fa-solid fa-trash" style="font-size: 0.8rem;"></i>
+                    </button>
                 </td>
             </tr>
-        `).join("");
+            `;
+        }).join("");
     } else {
-        tb.innerHTML = "<tr><td colspan='5' class='text-center text-muted py-3'>Belum ada data guru.</td></tr>";
+        tb.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted"><div class="fs-1 mb-3"><i class="fa-regular fa-folder-open opacity-50"></i></div><h6 class="fw-bold">Data tidak ditemukan</h6>Pencarian atau filter Anda tidak cocok dengan data manapun.</td></tr>`;
+    }
+
+    // 5. Render Info Teks Paginasi
+    const infoPaginasi = document.getElementById("infoPaginasiGuru");
+    if (infoPaginasi) {
+        let startTampil = totalItems === 0 ? 0 : startIndex + 1;
+        let endTampil = endIndex > totalItems ? totalItems : endIndex;
+        infoPaginasi.innerHTML = `<i class="fa-solid fa-circle-info me-1 text-primary"></i> Menampilkan <b>${startTampil}</b> - <b>${endTampil}</b> dari total <b>${totalItems}</b> data`;
+    }
+
+    // 6. Render Tombol Navigasi Paginasi
+    const navPaginasi = document.getElementById("navPaginasiGuru");
+    if (navPaginasi) {
+        let pagHTML = "";
+        
+        // Tombol Prev (<)
+        pagHTML += `<li class="page-item ${currentPageGuru === 1 ? 'disabled' : ''}">
+            <button class="page-link shadow-sm" onclick="gantiPageGuru(${currentPageGuru - 1})"><i class="fa-solid fa-chevron-left small"></i></button>
+        </li>`;
+        
+        // Nomor Halaman Terbatas (Hanya tampilkan 3 nomor terdekat agar tidak kepanjangan)
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPageGuru - 1 && i <= currentPageGuru + 1)) {
+                let activeClass = i === currentPageGuru ? 'active' : '';
+                pagHTML += `<li class="page-item ${activeClass}">
+                    <button class="page-link shadow-sm fw-bold" onclick="gantiPageGuru(${i})">${i}</button>
+                </li>`;
+            } else if (i === currentPageGuru - 2 || i === currentPageGuru + 2) {
+                pagHTML += `<li class="page-item disabled"><span class="page-link border-0 bg-transparent text-muted px-1">...</span></li>`;
+            }
+        }
+
+        // Tombol Next (>)
+        pagHTML += `<li class="page-item ${currentPageGuru === totalPages ? 'disabled' : ''}">
+            <button class="page-link shadow-sm" onclick="gantiPageGuru(${currentPageGuru + 1})"><i class="fa-solid fa-chevron-right small"></i></button>
+        </li>`;
+        
+        navPaginasi.innerHTML = totalItems > 0 ? pagHTML : "";
     }
 }
 
@@ -3872,24 +4005,27 @@ async function cekSmartAlert(role) {
 // LOGIKA UTAMA: TARIK DATA & TAMPILKAN HALAMAN CEK POIN SISWA
 // =====================================================================
 // ========================================================
-// SCRIPT RIWAYAT POIN (DENGAN KOLOM PELAPOR & BUKTI FOTO)
+// SCRIPT RIWAYAT POIN (PERBAIKAN SINKRONISASI DATA)
 // ========================================================
 async function loadCekPoinSiswa() {
     if (!currentUser) return;
 
-    let nisnAsli = currentUser.username || "0000000000";
-    let nisnSensor = nisnAsli.length > 5 ? nisnAsli.substring(0, 3) + "***" + nisnAsli.substring(nisnAsli.length - 1) : nisnAsli;
+    // 1. PERBAIKAN FATAL: Ambil NISN dari .identitas (sesuai sistem Anda)
+    let nisnSiswa = currentUser.identitas || currentUser.username || (currentUser.rawData ? currentUser.rawData.username : "");
+    
+    let nisnSensor = nisnSiswa.length > 5 ? nisnSiswa.substring(0, 3) + "***" + nisnSiswa.substring(nisnSiswa.length - 1) : nisnSiswa;
 
     document.getElementById("uiPoinNama").innerText = currentUser.nama_lengkap || currentUser.nama || "SISWA";
     document.getElementById("uiPoinNisn").innerText = nisnSensor;
     document.getElementById("uiPoinKelas").innerText = currentUser.kelas || "-";
 
     try {
+        // 2. QUERY DATABASE DENGAN NISN YANG BENAR
         const { data, error } = await supabaseClient
             .from('log_pelanggaran')
-            .select('*, kamus_pelanggaran(jenis_pelanggaran)')
-            .eq('nisn', currentUser.username)
-            .eq('status', 'Disetujui')
+            .select('*') // Mengambil semua kolom di log_pelanggaran
+            .eq('nisn', nisnSiswa)
+            .ilike('status', '%setuju%') // Kebal huruf besar/kecil (Disetujui / disetujui tetap terbaca)
             .order('tanggal', { ascending: false });
 
         let totalPoin = 0;
@@ -3901,20 +4037,20 @@ async function loadCekPoinSiswa() {
         if (data && data.length > 0) {
             data.forEach(p => {
                 let poin = parseInt(p.poin) || 0;
-                totalPoin += poin;
+                totalPoin += poin; // Akumulasi total poin
 
                 let tgl = new Date(p.tanggal).toLocaleDateString('sv-SE');
                 let kode = p.kode_pelanggaran || "-";
-                let ket = p.keterangan || (p.kamus_pelanggaran ? p.kamus_pelanggaran.jenis_pelanggaran : "-");
+                let ket = p.keterangan || "-";
                 
                 // --- LOGIKA PRIVASI PELAPOR ---
                 let namaPelapor = p.pelapor || "Sistem";
                 if (namaPelapor.startsWith("[SISWA]")) {
-                    namaPelapor = "Siswa (Dirahasiakan)"; // Disensor dari pandangan siswa!
+                    namaPelapor = "Siswa (Dirahasiakan)"; 
                 }
                 
                 // --- TOMBOL BUKTI FOTO ---
-                let linkBukti = p.bukti_link || p.bukti; // Menyesuaikan nama kolom DB Anda
+                let linkBukti = p.bukti_link || p.bukti; 
                 let tombolBukti = (linkBukti && (linkBukti.startsWith('data:') || linkBukti.startsWith('http'))) 
                     ? `<a href="${linkBukti}" target="_blank" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-image"></i></a>` 
                     : `<span class="text-muted small">-</span>`;
@@ -3929,13 +4065,15 @@ async function loadCekPoinSiswa() {
                 </tr>`;
             });
         } else {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5"><i class="fa-regular fa-face-smile-beam text-success fs-1 mb-3 opacity-50"></i><h5 class="fw-bold text-success mb-0">Luar Biasa!</h5><p class="text-muted small">Anda tidak memiliki catatan pelanggaran.</p></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5"><i class="fa-regular fa-face-smile-beam text-success fs-1 mb-3 opacity-50"></i><h5 class="fw-bold text-success mb-0">Luar Biasa!</h5><p class="text-muted small">Anda tidak memiliki catatan pelanggaran yang disetujui.</p></td></tr>`;
         }
 
-        // UPDATE KARTU KIRI (Sama seperti sebelumnya)
+        // 3. UPDATE KARTU TOTAL POIN (KIRI)
         document.getElementById("uiPoinTotal").innerText = totalPoin;
-        let statusSP = "Aman"; let barColor = "bg-white";
-        if (totalPoin >= 100) { statusSP = "SP 3"; barColor = "bg-danger"; }
+        let statusSP = "Aman"; 
+        let barColor = "bg-white";
+        
+        if (totalPoin >= 100) { statusSP = "SP 3 / DIKEMBALIKAN"; barColor = "bg-danger"; }
         else if (totalPoin >= 75) { statusSP = "SP 2"; barColor = "bg-warning"; }
         else if (totalPoin >= 50) { statusSP = "SP 1"; barColor = "bg-warning"; }
         
@@ -3947,7 +4085,8 @@ async function loadCekPoinSiswa() {
         }, 300);
 
     } catch (err) {
-        document.getElementById("uiPoinTabelData").innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Gagal memuat data.</td></tr>`;
+        console.error("Gagal sinkron poin:", err);
+        document.getElementById("uiPoinTabelData").innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Gagal memuat data sinkronisasi.</td></tr>`;
     }
 }
 

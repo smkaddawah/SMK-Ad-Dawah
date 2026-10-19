@@ -758,17 +758,83 @@
             </div>
         </div>
         
-        <div id="tabGuru">
-            <div class="card shadow-sm border-0 rounded-4 bg-white">
-                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
-                    <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chalkboard-user text-primary me-2"></i>Data Guru & Wali Kelas</h5>
-                    <button class="btn btn-primary btn-sm fw-bold" onclick="bukaModalGuru('tambah')"><i class="fa-solid fa-user-plus me-1"></i>Tambah Guru/Wali Kelas</button>
+<!-- ======================================================== -->
+<!-- TAB GURU (MODERN UI & PAGINATION)                        -->
+<!-- ======================================================== -->
+<div id="tabGuru" style="display: none; padding: 20px 10px;">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; background-color: #ffffff;">
+        
+        <!-- Header -->
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center flex-wrap gap-3" style="padding: 24px 24px 16px 24px; border-top-left-radius: 16px; border-top-right-radius: 16px;">
+            <div class="d-flex align-items-center">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 48px; height: 48px;">
+                    <i class="fa-solid fa-users fs-5"></i>
                 </div>
-                <div class="card-body p-3">
-                    <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>ID / NIP</th><th>Nama Lengkap</th><th>Peran (Role)</th><th>Kelas (Jika Wali)</th><th>Aksi</th></tr></thead><tbody id="tbAllGuru"></tbody></table></div>
+                <div>
+                    <h4 class="fw-bold mb-1 text-dark" style="letter-spacing: -0.5px;">Data Guru & Wali Kelas</h4>
+                    <p class="text-muted small mb-0">Informasi lengkap guru dan wali kelas di sekolah</p>
                 </div>
             </div>
+            <button class="btn btn-primary fw-bold px-4 py-2" style="border-radius: 10px; box-shadow: 0 4px 12px rgba(13,110,253,0.2);" onclick="bukaModalGuru('tambah')">
+                <i class="fa-solid fa-plus me-2"></i>Tambah Guru/Wali Kelas
+            </button>
         </div>
+
+        <!-- Toolbar (Search & Filters) -->
+        <div class="px-4 py-3 d-flex flex-wrap gap-3 align-items-center bg-white border-bottom border-light">
+            <div class="flex-grow-1 position-relative" style="min-width: 250px;">
+                <i class="fa-solid fa-magnifying-glass position-absolute text-muted" style="top: 50%; left: 16px; transform: translateY(-50%);"></i>
+                <input type="text" id="searchGuru" class="form-control" placeholder="Cari nama guru, NIP, atau kelas..." style="padding-left: 42px; border-radius: 10px; border: 1px solid #e0e0e0; background-color: #fcfcfc;" oninput="filterDataGuru()">
+            </div>
+            <div style="min-width: 180px;">
+                <select id="filterRoleGuru" class="form-select text-secondary fw-semibold" style="border-radius: 10px; border: 1px solid #e0e0e0; background-color: #fcfcfc;" onchange="filterDataGuru()">
+                    <option value="all">Semua Peran</option>
+                    <option value="guru">Guru</option>
+                    <option value="walikelas">Wali Kelas</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive px-3 pt-2">
+            <table class="table table-borderless table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                <thead style="border-bottom: 2px solid #f1f3f5;">
+                    <tr>
+                        <th class="text-muted fw-bold py-3 ps-3" style="width: 5%;">No</th>
+                        <th class="text-muted fw-bold py-3" style="width: 35%;"><i class="fa-regular fa-user me-2"></i>Nama Lengkap</th>
+                        <th class="text-muted fw-bold py-3" style="width: 20%;"><i class="fa-solid fa-shield-halved me-2"></i>Peran (Role)</th>
+                        <th class="text-muted fw-bold py-3" style="width: 20%;"><i class="fa-solid fa-people-roof me-2"></i>Kelas (Jika Wali)</th>
+                        <th class="text-muted fw-bold py-3 text-center" style="width: 20%;"><i class="fa-solid fa-gear me-2"></i>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="tbAllGuru">
+                    <!-- Data diisi oleh JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div class="card-footer bg-white border-0 d-flex justify-content-between align-items-center flex-wrap gap-3" style="padding: 20px 24px; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; border-top: 1px solid #f1f3f5;">
+            <div class="text-muted small fw-semibold" id="infoPaginasiGuru">
+                <i class="fa-solid fa-circle-info me-1"></i> Menampilkan 0 dari 0 data
+            </div>
+            <nav>
+                <ul class="pagination pagination-sm mb-0 gap-2" id="navPaginasiGuru">
+                    <!-- Tombol Paginasi -->
+                </ul>
+            </nav>
+        </div>
+        
+    </div>
+</div>
+
+<style>
+    /* Styling Paginasi Modern */
+    #navPaginasiGuru .page-link { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #495057; background-color: #fff; border: 1px solid #dee2e6; border-radius: 8px !important; transition: all 0.2s; }
+    #navPaginasiGuru .page-link:hover { background-color: #e9ecef; }
+    #navPaginasiGuru .page-item.active .page-link { background-color: #0d6efd; color: #fff; border-color: #0d6efd; box-shadow: 0 2px 6px rgba(13,110,253,0.3); }
+    #navPaginasiGuru .page-item.disabled .page-link { color: #adb5bd; background-color: #f8f9fa; border-color: #dee2e6; cursor: not-allowed; }
+</style>
         
         <div id="tabKamus">
             <div class="card shadow-sm border-0 rounded-4 bg-white">
