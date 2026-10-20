@@ -195,41 +195,156 @@
     <!-- ============================================== -->
     <!-- 1. HALAMAN LOGIN -->
     <!-- ============================================== -->
-    <div class="container my-4 my-md-5" id="loginSection">
-        <div class="row justify-content-center mt-4 mb-5">
-            <div class="col-md-5">
-                <div class="card login-card shadow-lg border-0 p-4 bg-white mx-auto rounded-4">
-                    <div class="text-center mb-4">
-                        <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" alt="Logo Addawah" width="90" class="mb-3">
-                        <h3 class="fw-bold text-success m-0">E-Tertib Mobile</h3>
-                        <p class="text-muted small">Sistem Pemantauan & Tata Tertib Siswa</p>
-                    </div>
-                    <form id="formLogin" onsubmit="handleLogin(event)">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold text-success small">Masuk Sebagai</label>
-                            <select class="form-select rounded-3" id="loginRole" required>
-                                <option value="siswa">Siswa</option>
-                                <option value="guru">Guru</option>
-                                <option value="admin">Admin</option>
-                                <option value="walikelas">Wali Kelas</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold text-success small">ID Pengguna / NISN</label>
-                            <input type="text" class="form-control rounded-3" id="loginUser" placeholder="Masukkan NISN / Username" required>
-                        </div>
-                        <div class="mb-4">
-                            <label class="form-label fw-bold text-success small">Kata Sandi</label>
-                            <input type="password" class="form-control rounded-3" id="loginPass" placeholder="••••••••" required>
-                        </div>
-                        <button type="submit" class="btn btn-success w-100 py-3 rounded-3 fw-bold shadow-sm" id="btnLogin">
-                            <i class="fa-solid fa-right-to-bracket me-2"></i>Masuk ke Sistem
-                        </button>
-                    </form>
-                </div>
+    <!-- ============================================== -->
+<!-- 1. HALAMAN LOGIN & WELCOME EXPERIENCE -->
+<!-- ============================================== -->
+<div id="loginSection" class="welcome-wrapper">
+    <div class="welcome-overlay"></div>
+
+    <!-- A. TAMPILAN WELCOME PAGE -->
+    <div id="welcomeView" class="container-fluid welcome-container">
+        
+        <!-- Header Branding -->
+        <div class="welcome-header">
+            <img src="assets/img/logo.png" alt="Logo SMK Ad-Da'wah" class="welcome-logo">
+            <div class="welcome-brand">
+                <h1 class="brand-title">E-Tertib Mobile</h1>
+                <p class="brand-subtitle">Sistem Pemantauan & Tata Tertib Siswa</p>
             </div>
         </div>
+
+        <!-- Hero Section -->
+        <div class="welcome-hero text-center">
+            <h2 class="hero-title">SELAMAT DATANG<br>DI SMK AD-DA'WAH</h2>
+            <p class="hero-subtitle">Sistem Informasi Digital SMK Pusat Keunggulan<br>SMK Ad-Da'Wah Jakarta</p>
+            <span class="hero-instruction px-3 py-1 rounded-pill bg-white shadow-sm">Pilih peran untuk melanjutkan</span>
+        </div>
+
+        <!-- Role Selection Cards -->
+        <div class="role-cards-container">
+            <!-- Card Admin -->
+            <button class="role-card" onclick="selectRole('admin', 'Admin', 'fa-shield-halved', 'Masuk dengan akun administrator Anda')">
+                <div class="role-icon-wrapper"><i class="fa-solid fa-shield-halved"></i></div>
+                <div class="role-text">
+                    <h3>Admin</h3>
+                    <p>Akses penuh sistem dan pengelolaan data</p>
+                </div>
+                <i class="fa-solid fa-arrow-right role-arrow"></i>
+            </button>
+
+            <!-- Card Guru -->
+            <button class="role-card" onclick="selectRole('guru', 'Guru', 'fa-graduation-cap', 'Masuk dengan akun guru Anda')">
+                <div class="role-icon-wrapper"><i class="fa-solid fa-graduation-cap"></i></div>
+                <div class="role-text">
+                    <h3>Guru</h3>
+                    <p>Kelola pembelajaran dan data siswa</p>
+                </div>
+                <i class="fa-solid fa-arrow-right role-arrow"></i>
+            </button>
+
+            <!-- Card Wali Kelas -->
+            <button class="role-card" onclick="selectRole('walikelas', 'Wali Kelas', 'fa-users', 'Masuk dengan akun wali kelas Anda')">
+                <div class="role-icon-wrapper"><i class="fa-solid fa-users"></i></div>
+                <div class="role-text">
+                    <h3>Wali Kelas</h3>
+                    <p>Kelola kelas dan absensi siswa</p>
+                </div>
+                <i class="fa-solid fa-arrow-right role-arrow"></i>
+            </button>
+
+            <!-- Card Siswa -->
+            <button class="role-card" onclick="selectRole('siswa', 'Siswa', 'fa-user-large', 'Masuk dengan akun siswa Anda')">
+                <div class="role-icon-wrapper"><i class="fa-solid fa-user-large"></i></div>
+                <div class="role-text">
+                    <h3>Siswa</h3>
+                    <p>Akses informasi pribadi dan akademik</p>
+                </div>
+                <i class="fa-solid fa-arrow-right role-arrow"></i>
+            </button>
+        </div>
+
+        <!-- Footer Welcome -->
+        <div class="welcome-footer mt-auto">
+            <i class="fa-solid fa-shield-halved text-success me-1"></i> SMK Ad-Da'Wah Jakarta <span class="mx-2">|</span> Berakhlak • Berprestasi • Berdaya Saing
+        </div>
     </div>
+
+
+    <!-- B. TAMPILAN FORM LOGIN (Awalnya Disembunyikan) -->
+    <div id="loginFormView" class="container-fluid login-form-container d-none">
+        
+        <!-- Tombol Kembali -->
+        <div class="mb-4">
+            <button class="btn-back" onclick="showWelcome()">
+                <i class="fa-solid fa-arrow-left"></i> Kembali pilih peran
+            </button>
+        </div>
+
+        <!-- Header Branding -->
+        <div class="welcome-header justify-content-center mb-4">
+            <img src="assets/img/logo.png" alt="Logo SMK Ad-Da'wah" class="welcome-logo">
+            <div class="welcome-brand">
+                <h1 class="brand-title">E-Tertib Mobile</h1>
+                <p class="brand-subtitle">Sistem Pemantauan & Tata Tertib Siswa</p>
+            </div>
+        </div>
+
+        <!-- Login Card -->
+        <div class="card login-card-modern shadow-lg border-0 rounded-4 mx-auto">
+            <div class="card-body p-4 p-md-5">
+                
+                <!-- Dynamic Role Info -->
+                <div class="selected-role-info mb-4">
+                    <div class="selected-role-icon"><i id="selectedRoleIcon" class="fa-solid fa-user"></i></div>
+                    <div>
+                        <h4 id="selectedRoleTitle" class="m-0 fw-bold text-dark">Role</h4>
+                        <p id="selectedRoleDesc" class="m-0 text-muted" style="font-size: 13px;">Deskripsi Login</p>
+                    </div>
+                </div>
+
+                <!-- FORM LOGIN (ID dipertahankan agar JS/Backend lama tetap jalan) -->
+                <form id="formLogin" onsubmit="handleLogin(event)">
+                    
+                    <!-- Form Role (Disembunyikan, nilainya diganti oleh fungsi selectRole) -->
+                    <select class="d-none" id="loginRole">
+                        <option value="siswa">Siswa</option>
+                        <option value="guru">Guru</option>
+                        <option value="admin">Admin</option>
+                        <option value="walikelas">Wali Kelas</option>
+                    </select>
+
+                    <div class="mb-3 input-group-modern">
+                        <label class="form-label fw-bold">Username / NISN</label>
+                        <div class="input-wrapper">
+                            <i class="fa-regular fa-user input-icon"></i>
+                            <input type="text" class="form-control" id="loginUser" placeholder="Masukkan username" required autocomplete="off">
+                        </div>
+                    </div>
+
+                    <div class="mb-4 input-group-modern">
+                        <label class="form-label fw-bold">Password</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-lock input-icon"></i>
+                            <input type="password" class="form-control" id="loginPass" placeholder="Masukkan password" required>
+                            <button type="button" class="btn-toggle-pass" onclick="togglePassword()" aria-label="Tampilkan Password">
+                                <i id="eyeIcon" class="fa-regular fa-eye-slash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-login-modern w-100 fw-bold shadow-sm" id="btnLogin">
+                        <i class="fa-solid fa-right-to-bracket me-2"></i>Masuk ke Sistem
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Footer Form Login -->
+        <div class="welcome-footer mt-auto justify-content-center">
+            <i class="fa-solid fa-shield-halved text-success me-1"></i> SMK Ad-Da'Wah Jakarta <span class="mx-2">|</span> Berakhlak • Berprestasi • Berdaya Saing
+        </div>
+    </div>
+</div>
 
     <!-- ============================================== -->
     <!-- 2. CANGKANG MOBILE APP (TAMPILAN UTAMA GRID) -->

@@ -65,6 +65,74 @@ async function loadPending() {
   }
 }
 
+// ==============================================================
+// LOGIKA WELCOME PAGE & PENGGANTIAN ROLE LOGIN
+// ==============================================================
+
+/**
+ * Fungsi yang dijalankan ketika user memilih salah satu kartu Role
+ */
+function selectRole(roleValue, roleName, roleIcon, roleDesc) {
+    // 1. Simpan nilai ke Form Select agar Backend Anda tetap bisa mendeteksi rolenya
+    document.getElementById('loginRole').value = roleValue;
+    
+    // 2. Ubah UI Info di atas form agar sesuai dengan Role yang dipilih
+    document.getElementById('selectedRoleIcon').className = 'fa-solid ' + roleIcon;
+    document.getElementById('selectedRoleTitle').innerText = roleName;
+    document.getElementById('selectedRoleDesc').innerText = roleDesc;
+    
+    // 3. Efek Transisi Layar
+    const welcomeView = document.getElementById('welcomeView');
+    const loginView = document.getElementById('loginFormView');
+    
+    // Hilangkan halaman Welcome, Munculkan halaman Login
+    welcomeView.classList.add('d-none');
+    loginView.classList.remove('d-none');
+    
+    // Jalankan animasi ringan CSS
+    loginView.style.animation = "none";
+    void loginView.offsetWidth; // Trigger reflow
+    loginView.style.animation = "fadeInUp 0.3s ease-out";
+}
+
+/**
+ * Fungsi saat menekan tombol "Kembali Pilih Peran"
+ */
+function showWelcome() {
+    const welcomeView = document.getElementById('welcomeView');
+    const loginView = document.getElementById('loginFormView');
+    
+    // Kosongkan password demi keamanan setiap kali kembali
+    document.getElementById('loginPass').value = '';
+    
+    // Sembunyikan form login, tampilkan kembali welcome page
+    loginView.classList.add('d-none');
+    welcomeView.classList.remove('d-none');
+    
+    // Animasi kembali
+    welcomeView.style.animation = "none";
+    void welcomeView.offsetWidth;
+    welcomeView.style.animation = "fadeInUp 0.3s ease-out";
+}
+
+/**
+ * Fungsi Mata pada Password (Melihat Sandi)
+ */
+function togglePassword() {
+    const passInput = document.getElementById('loginPass');
+    const eyeIcon = document.getElementById('eyeIcon');
+    
+    if (passInput.type === 'password') {
+        passInput.type = 'text';
+        eyeIcon.classList.remove('fa-eye-slash');
+        eyeIcon.classList.add('fa-eye');
+    } else {
+        passInput.type = 'password';
+        eyeIcon.classList.remove('fa-eye');
+        eyeIcon.classList.add('fa-eye-slash');
+    }
+}
+
 // ================= FITUR APPROVE ALL (DENGAN PENGAMAN ANTI-BUG) =================
 // ================= FITUR APPROVE ALL (TANPA TAG HTML DI MODAL) =================
 async function setujuiSemuaLaporan() {
