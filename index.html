@@ -129,6 +129,7 @@
                 <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_kamus', 'Kamus SP')"><i class="fa-solid fa-book text-secondary"></i> Kamus SP</div>
                 <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_rekap', 'Rekap SP')"><i class="fa-solid fa-file-pdf text-danger"></i> Rekap SP</div>
                 <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_rekapabsen', 'Rekap Absen')"><i class="fa-solid fa-calendar-check text-info"></i> Rekap Absen</div>
+                <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_pengaturanabsen', 'Pengaturan Absen')"><i class="fa-solid fa-gears text-warning"></i> Pengaturan Absen</div>
                 <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_absensi', 'Sistem QR')"><i class="fa-solid fa-qrcode text-primary"></i> Sistem QR</div>
                 <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_cetakqr', 'Cetak QR')"><i class="fa-solid fa-print text-dark"></i> Cetak QR</div>
                 <div class="sidebar-menu-item" onclick="bukaHalamanApp('admin_eraport', 'Set E-Raport')"><i class="fa-solid fa-gears text-danger"></i> Set E-Raport</div>
@@ -902,27 +903,374 @@
                 </div>
             </div>
         </div>
-        <div id="tabRekapAbsen">
-            <div class="card shadow-sm border-0 rounded-4 bg-white">
-                <div class="card-header bg-info text-white py-3"><h5 class="fw-bold mb-0"><i class="fa-solid fa-calendar-days me-2"></i>Rekap Laporan Absensi</h5></div>
-                <div class="card-body p-4">
-                    <div class="row g-3 mb-4 bg-light p-3 rounded-3 border align-items-end">
-                        <div class="col-md-2"><label class="form-label small fw-bold">Jenis Rekap</label><select class="form-select" id="filterTipeRekapAbsen" onchange="aturInputRekapAbsen()"><option value="harian">Harian</option><option value="mingguan">Mingguan / Rentang</option><option value="bulanan">Bulanan</option></select></div>
-                        <div class="col-md-3" id="wrapAbsenHarian"><label class="form-label small fw-bold">Pilih Tanggal</label><input type="date" class="form-control" id="inputAbsenHarian"></div>
-                        <div class="col-md-3" id="wrapAbsenRentang" style="display:none;"><label class="form-label small fw-bold">Tgl Mulai - Akhir</label><div class="d-flex gap-1"><input type="date" class="form-control px-1" id="inputAbsenStart"><input type="date" class="form-control px-1" id="inputAbsenEnd"></div></div>
-                        <div class="col-md-3" id="wrapAbsenBulanan" style="display:none;"><label class="form-label small fw-bold">Bulan & Tahun</label><input type="month" class="form-control" id="inputAbsenBulan"></div>
-                        <div class="col-md-2"><label class="form-label small fw-bold">Kategori</label><select class="form-select" id="filterAbsenKategori" onchange="aturInputRekapAbsen()"><option value="siswa">Siswa</option><option value="guru">Guru</option></select></div>
-                        <div class="col-md-2" id="wrapAbsenKelas"><label class="form-label small fw-bold">Kelas</label><select class="form-select" id="filterAbsenKelas"><option value="">Semua Kelas</option></select></div>
-                        <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary fw-bold w-100" onclick="tampilkanRekapAbsen()"><i class="fa-solid fa-search me-1"></i> Cari</button><button class="btn btn-danger fw-bold w-100" onclick="downloadPDFAbsensiAdmin()"><i class="fa-solid fa-file-pdf me-1"></i> PDF</button><button class="btn btn-success fw-bold w-100" onclick="downloadExcelAbsensiAdmin()"><i class="fa-solid fa-file-excel me-1"></i> Excel</button></div>
+
+<!-- ======================================================== -->
+<!-- TAB REKAP ABSENSI (DASHBOARD & MODE CETAK)               -->
+<!-- ======================================================== -->
+<div id="tabRekapAbsen" style="display: none; padding: 20px 10px; background-color: #f8f9fa; min-height: 100vh;">
+    
+    <!-- ================= LAYAR 1: DASHBOARD ================= -->
+    <div id="layarDashboardAbsen">
+        <div class="d-flex justify-content-between align-items-center flex-wrap mb-4 px-2 gap-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 55px; height: 55px;">
+                    <i class="fa-regular fa-calendar-days fs-4"></i>
+                </div>
+                <div>
+                    <h3 class="fw-bold mb-0 text-dark" style="letter-spacing: -0.5px;">Dashboard Absensi</h3>
+                    <p class="text-muted small mb-0">Ringkasan analitik kehadiran Siswa & PTK</p>
+                </div>
+            </div>
+            <button class="btn btn-success fw-bold rounded-pill px-4 shadow-sm" onclick="bukaModeCetak()">
+                <i class="fa-solid fa-print me-2"></i>Buka Mode Cetak PDF/Excel
+            </button>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 16px;">
+            <div class="card-body p-4 d-flex flex-wrap gap-3 align-items-end bg-white rounded-4">
+                <div style="flex: 1; min-width: 150px;">
+                    <label class="form-label small fw-bold text-muted mb-1">Tipe Dashboard</label>
+                    <select class="form-select bg-light fw-bold" id="dashTipe" onchange="aturFilterDashboard()">
+                        <option value="tahunan">Tahunan (Semester)</option>
+                        <option value="bulanan">Bulanan</option>
+                        <option value="rentang">Rentang Tanggal</option>
+                    </select>
+                </div>
+                
+                <div id="dashWrapTahun" style="flex: 1; min-width: 170px;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-bold text-muted mb-0">Tahun Ajaran</label>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2" style="border-radius: 6px;" onclick="bukaModalTahun()" title="Tambah Tahun"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-2" style="border-radius: 6px;" onclick="hapusTahunAjaran()" title="Hapus Terpilih"><i class="fa-solid fa-trash"></i></button>
+                        </div>
                     </div>
-                    <div class="mb-3"><input type="text" class="form-control" id="pencarianTabelAbsen" placeholder="Ketik nama atau NISN untuk mencari..." onkeyup="cariDiTabelAbsen()"></div>
-                    <div id="areaCetakRekapAbsen">
-                        <div class="text-center mb-3" id="headerKopAbsen" style="display: none;"><h4 class="fw-bold m-0">LAPORAN ABSENSI</h4><h6 class="m-0" id="subjudulLaporanAbsen">SMK AD-DA'WAH</h6><hr></div>
-                        <div class="table-responsive"><table class="table table-bordered table-hover align-middle mb-0 text-center" id="tabelRekapAbsenSistem"><thead class="table-light"><tr><th>No</th><th>Tanggal</th><th>ID/NISN</th><th>Nama Lengkap</th><th>Kelas</th><th>Waktu Masuk</th><th>Waktu Pulang</th></tr></thead><tbody id="tbRekapAbsenAdmin"><tr><td colspan="7" class="text-muted py-4">Silakan atur filter dan klik Cari.</td></tr></tbody></table></div>
+                    <select class="form-select bg-light fw-bold" id="dashTahun"></select>
+                </div>
+                <div id="dashWrapBulan" style="flex: 1; min-width: 150px; display: none;">
+                    <label class="form-label small fw-bold text-muted mb-1">Pilih Bulan</label>
+                    <input type="month" class="form-control bg-light fw-bold" id="dashBulan">
+                </div>
+                <div id="dashWrapRentang" style="flex: 2; min-width: 250px; display: none;">
+                    <label class="form-label small fw-bold text-muted mb-1">Tanggal Mulai - Akhir</label>
+                    <div class="d-flex gap-2">
+                        <input type="date" class="form-control bg-light fw-bold" id="dashStart">
+                        <input type="date" class="form-control bg-light fw-bold" id="dashEnd">
+                    </div>
+                </div>
+
+                <div style="flex: 1; min-width: 150px;">
+                    <label class="form-label small fw-bold text-muted mb-1">Target Kehadiran</label>
+                    <!-- PERBAIKAN: value diubah menjadi "guru" agar Backend merespons -->
+                    <select class="form-select bg-light fw-bold" id="dashKategori">
+                        <option value="siswa">Siswa</option>
+                        <option value="guru">PTK (Guru & Wali Kelas)</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-primary fw-bold px-4" onclick="loadDashboard()"><i class="fa-solid fa-search me-2"></i>Tampilkan</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-6"><div class="card border-0 p-3 h-100 shadow-sm" style="border-radius: 16px; background-color: #ebf7f1;"><div class="d-flex align-items-center mb-2"><i class="fa-solid fa-circle-check text-success fs-5 me-2"></i><span class="fw-bold text-success small">Total Hadir</span></div><h2 class="fw-bolder text-dark mb-0" id="cardJmlH">0</h2><span class="text-muted" style="font-size: 0.7rem;" id="cardPctH">0% dari kehadiran</span></div></div>
+            <div class="col-md-3 col-6"><div class="card border-0 p-3 h-100 shadow-sm" style="border-radius: 16px; background-color: #fef0f0;"><div class="d-flex align-items-center mb-2"><i class="fa-solid fa-circle-plus text-danger fs-5 me-2"></i><span class="fw-bold text-danger small">Total Sakit</span></div><h2 class="fw-bolder text-dark mb-0" id="cardJmlS">0</h2><span class="text-muted" style="font-size: 0.7rem;" id="cardPctS">0% dari kehadiran</span></div></div>
+            <div class="col-md-3 col-6"><div class="card border-0 p-3 h-100 shadow-sm" style="border-radius: 16px; background-color: #fff9e6;"><div class="d-flex align-items-center mb-2"><i class="fa-solid fa-envelope-open-text text-warning fs-5 me-2"></i><span class="fw-bold text-warning small" style="color: #d97706 !important;">Total Izin</span></div><h2 class="fw-bolder text-dark mb-0" id="cardJmlI">0</h2><span class="text-muted" style="font-size: 0.7rem;" id="cardPctI">0% dari kehadiran</span></div></div>
+            <div class="col-md-3 col-6"><div class="card border-0 p-3 h-100 shadow-sm" style="border-radius: 16px; background-color: #f4effa;"><div class="d-flex align-items-center mb-2"><i class="fa-solid fa-triangle-exclamation text-purple fs-5 me-2" style="color: #7e22ce;"></i><span class="fw-bold small" style="color: #7e22ce;">Total Alpa</span></div><h2 class="fw-bolder text-dark mb-0" id="cardJmlA">0</h2><span class="text-muted" style="font-size: 0.7rem;" id="cardPctA">0% dari kehadiran</span></div></div>
+        </div>
+
+        <div class="card border-0 shadow-sm" style="border-radius: 16px;">
+            <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4" id="wrapTabsSemester">
+                <ul class="nav nav-tabs border-bottom-0 gap-4" id="semesterTabs">
+                    <li class="nav-item"><a class="nav-link active fw-bold px-0 text-primary border-0" id="tabGanjil" style="border-bottom: 3px solid #0d6efd !important; cursor: pointer;" onclick="pilihSemesterDash('ganjil')"><i class="fa-regular fa-calendar me-1"></i> Semester Ganjil <br><small class="text-muted fw-normal" style="font-size:0.7rem;">(Juli - Desember)</small></a></li>
+                    <li class="nav-item"><a class="nav-link fw-bold px-0 text-muted border-0" id="tabGenap" style="border-bottom: 3px solid transparent !important; cursor: pointer;" onclick="pilihSemesterDash('genap')"><i class="fa-regular fa-calendar-check me-1"></i> Semester Genap <br><small class="text-muted fw-normal" style="font-size:0.7rem;">(Januari - Juni)</small></a></li>
+                </ul><hr class="mt-0 mb-3 text-light">
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle text-center mb-0" style="font-size: 0.85rem;">
+                        <thead style="background-color: #f8faff; border-top: 1px solid #e9ecef;">
+                            <tr>
+                                <th rowspan="2" class="align-middle py-3 text-muted">No</th>
+                                <th rowspan="2" class="align-middle py-3 text-muted text-start" id="thGrupNama">Grup (Kelas / Nama)</th>
+                                <th rowspan="2" class="align-middle py-3 text-muted border-end" id="thGrupJml">Jumlah Personel</th>
+                                <th colspan="2" class="text-success border-end"><i class="fa-solid fa-check me-1"></i>Hadir</th>
+                                <th colspan="2" class="text-danger border-end"><i class="fa-solid fa-plus me-1"></i>Sakit</th>
+                                <th colspan="2" class="text-warning border-end" style="color: #d97706 !important;"><i class="fa-solid fa-envelope me-1"></i>Izin</th>
+                                <th colspan="2" style="color: #7e22ce;"><i class="fa-solid fa-triangle-exclamation me-1"></i>Alpa</th>
+                            </tr>
+                            <tr>
+                                <th class="text-muted bg-light border-bottom border-end" style="font-size: 0.75rem;">Jml</th><th class="text-muted bg-light border-bottom border-end" style="font-size: 0.75rem;">%</th>
+                                <th class="text-muted bg-light border-bottom border-end" style="font-size: 0.75rem;">Jml</th><th class="text-muted bg-light border-bottom border-end" style="font-size: 0.75rem;">%</th>
+                                <th class="text-muted bg-light border-bottom border-end" style="font-size: 0.75rem;">Jml</th><th class="text-muted bg-light border-bottom border-end" style="font-size: 0.75rem;">%</th>
+                                <th class="text-muted bg-light border-bottom" style="font-size: 0.75rem;">Jml</th><th class="text-muted bg-light border-bottom" style="font-size: 0.75rem;">%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbTahunanAbsen"><tr><td colspan="11" class="py-5 text-muted">Silakan atur filter dan klik "Tampilkan"</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= LAYAR 2: MODE CETAK (PREVIEW & EXPORT) ================= -->
+    <div id="layarCetakAbsen" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <button class="btn btn-outline-secondary fw-bold rounded-pill shadow-sm" onclick="tutupModeCetak()">
+                <i class="fa-solid fa-arrow-left me-2"></i>Kembali ke Dashboard
+            </button>
+            <h4 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-print me-2 text-primary"></i>Mode Cetak PDF/Excel</h4>
+        </div>
+        
+        <div class="card shadow-sm border-0 rounded-4 bg-white">
+            <div class="card-body p-4">
+                <div class="row g-3 mb-4 bg-light p-3 rounded-3 border align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Jenis Rekap</label>
+                        <select class="form-select fw-bold" id="filterTipeRekapAbsen" onchange="aturInputCetak()">
+                            <option value="harian">Harian</option>
+                            <option value="mingguan">Rentang Tanggal</option>
+                            <option value="bulanan" selected>Bulanan (Matriks)</option>
+                            <option value="tahunan">Tahunan (Total Saja)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3" id="wrapAbsenHarian" style="display:none;"><label class="form-label small fw-bold">Pilih Tanggal</label><input type="date" class="form-control fw-bold" id="inputAbsenHarian"></div>
+                    <div class="col-md-3" id="wrapAbsenRentang" style="display:none;"><label class="form-label small fw-bold">Tgl Mulai - Akhir</label><div class="d-flex gap-1"><input type="date" class="form-control px-1 fw-bold" id="inputAbsenStart"><input type="date" class="form-control px-1 fw-bold" id="inputAbsenEnd"></div></div>
+                    <div class="col-md-3" id="wrapAbsenBulanan"><label class="form-label small fw-bold">Bulan & Tahun</label><input type="month" class="form-control fw-bold" id="inputAbsenBulan"></div>
+                    <div class="col-md-3" id="wrapAbsenTahunan" style="display:none;"><label class="form-label small fw-bold">Tahun Ajaran</label><select class="form-select fw-bold" id="inputAbsenTahun"></select></div>
+
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Target</label>
+                        <!-- PERBAIKAN: value diubah menjadi "guru" -->
+                        <select class="form-select fw-bold" id="filterAbsenKategori" onchange="aturInputCetak()">
+                            <option value="siswa">Siswa</option>
+                            <option value="guru">PTK (Guru/Wali)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="wrapAbsenKelas">
+                        <label class="form-label small fw-bold">Kelas</label>
+                        <select class="form-select fw-bold" id="filterAbsenKelas"><option value="">Semua Kelas</option></select>
+                    </div>
+
+                    <div class="col-md-3 d-flex gap-2">
+                        <button class="btn btn-primary fw-bold flex-fill" onclick="tampilkanRekapCetak()"><i class="fa-solid fa-search"></i> Preview</button>
+                        <button class="btn btn-danger fw-bold flex-fill" onclick="downloadPDFAbsensiAdmin()"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+                        <button class="btn btn-success fw-bold flex-fill" onclick="downloadExcelAbsensiAdmin()"><i class="fa-solid fa-file-excel"></i> Excel</button>
+                    </div>
+                </div>
+                
+                <div class="mb-3"><input type="text" class="form-control" id="pencarianTabelAbsen" placeholder="Ketik nama atau NIP/NISN untuk memfilter tabel..." onkeyup="cariDiTabelAbsen()"></div>
+                
+                <div id="areaCetakRekapAbsen">
+                    <div class="text-center mb-3" id="headerKopAbsen" style="display: none;"><h4 class="fw-bold m-0">LAPORAN ABSENSI</h4><h6 class="m-0" id="subjudulLaporanAbsen">SMK AD-DA'WAH</h6><hr></div>
+                    <div class="table-responsive" id="wadahTabelCetak">
+                        <table class="table table-bordered text-center"><tbody id="tbRekapAbsenAdmin"><tr><td class="text-muted py-4">Tentukan filter lalu klik Preview.</td></tr></tbody></table>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- MODAL TAMBAH TAHUN AJARAN -->
+    <div class="modal fade" id="modalTambahTahun" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="fw-bold"><i class="fa-solid fa-calendar-plus text-primary me-2"></i>Tambah Tahun Ajaran</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold small text-muted">Format (Contoh: 2027/2028)</label>
+                    <input type="text" id="inputTahunBaru" class="form-control form-control-lg fw-bold" placeholder="2027/2028">
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button class="btn btn-primary fw-bold w-100 py-2" onclick="simpanTahunAjaranBaru()">Simpan Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DETAIL SISWA DASHBOARD -->
+    <div class="modal fade" id="modalDetailKelas" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header bg-light border-bottom-0 pb-3">
+                    <h5 class="fw-bold mb-0 text-primary"><i class="fa-solid fa-users me-2"></i>Detail Absensi Kelas: <span id="judulDetailKelas" class="text-dark"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle text-center mb-0" style="font-size: 0.85rem;">
+                            <thead style="background-color: #f8faff;">
+                                <tr>
+                                    <th class="py-3 text-muted">No</th>
+                                    <th class="py-3 text-muted text-start">NISN</th>
+                                    <th class="py-3 text-muted text-start">Nama Siswa</th>
+                                    <th class="text-success"><i class="fa-solid fa-check"></i> H</th>
+                                    <th class="text-danger"><i class="fa-solid fa-plus"></i> S</th>
+                                    <th class="text-warning text-dark"><i class="fa-solid fa-envelope"></i> I</th>
+                                    <th style="color: #7e22ce;"><i class="fa-solid fa-triangle-exclamation"></i> A</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbDetailSiswaDashboard">
+                                <!-- Data digenerate via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0 bg-light">
+                    <button class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- TAB PENGATURAN ABSENSI (JADWAL & HARI LIBUR)               -->
+<!-- ======================================================== -->
+<div id="tabPengaturanAbsen" style="display: none; padding: 20px 10px; background-color: #f8f9fa; min-height: 100vh;">
+    
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-4 px-2 gap-3">
+        <div class="d-flex align-items-center">
+            <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex justify-content-center align-items-center me-3" style="width: 55px; height: 55px;">
+                <i class="fa-solid fa-gears fs-4"></i>
+            </div>
+            <div>
+                <h3 class="fw-bold mb-0 text-dark">Pengaturan Absensi</h3>
+                <p class="text-muted small mb-0">Kelola Jadwal Mengajar Guru & Hari Libur</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- ================= KIRI: MANAJEMEN JADWAL ================= -->
+        <div class="col-md-7">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-calendar-week text-primary me-2"></i>Jadwal Mengajar (PTK)</h5>
+                    <button class="btn btn-sm btn-primary fw-bold" onclick="downloadTemplateJadwal()"><i class="fa-solid fa-download me-1"></i>Template Excel</button>
+                </div>
+                <div class="card-body px-4">
+                    <div class="alert alert-info border-0 bg-primary bg-opacity-10 small mb-4">
+                        <i class="fa-solid fa-circle-info me-2"></i><b>Info:</b> Jika Guru/Wali tidak memiliki jadwal di hari tertentu, status absennya otomatis menjadi <b>"-" (Bebas Tugas)</b>, bukan Alpa. Waktu masuk (telat) akan dihitung berdasarkan <b>jam paling awal</b> dia mengajar.
+                    </div>
+                    
+                    <div class="bg-light p-3 rounded-3 border mb-4">
+                        <label class="form-label fw-bold small text-dark">Upload Jadwal Excel</label>
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="fileUploadJadwal" accept=".xls,.xlsx,.csv">
+                            <button class="btn btn-success fw-bold px-4" onclick="prosesUploadJadwal()"><i class="fa-solid fa-upload me-2"></i>Import</button>
+                        </div>
+                        <small class="text-muted mt-1 d-block">* Mengupload jadwal baru akan <b>menimpa/mereset</b> seluruh jadwal lama.</small>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-end mb-2">
+                        <h6 class="fw-bold mb-0 text-muted">Preview Data Jadwal</h6>
+                        <select class="form-select form-select-sm w-auto fw-bold text-primary border-primary" id="filterHariJadwal" onchange="loadPreviewJadwal()">
+                            <option value="SENIN">Senin</option><option value="SELASA">Selasa</option><option value="RABU">Rabu</option><option value="KAMIS">Kamis</option><option value="JUMAT">Jumat</option><option value="SABTU">Sabtu</option>
+                        </select>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-bordered table-hover align-middle text-center mb-0" style="font-size: 0.85rem;">
+                            <thead class="table-light sticky-top">
+                                <tr><th>Hari</th><th>Kode Guru</th><th>Jam Ke</th><th>Kelas</th></tr>
+                            </thead>
+                            <tbody id="tbPreviewJadwal">
+                                <tr><td colspan="4" class="py-4 text-muted">Memuat data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= KANAN: HARI LIBUR & JAM ================= -->
+        <div class="col-md-5">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-2 px-4">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-calendar-xmark text-danger me-2"></i>Penetapan Hari Libur</h5>
+                </div>
+                <div class="card-body px-4">
+                    <div class="bg-light p-3 rounded-3 border mb-3">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Pilih Tanggal</label>
+                            <input type="date" class="form-control fw-bold" id="inputTglLibur">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Keterangan (Cth: Libur Nasional)</label>
+                            <input type="text" class="form-control" id="inputKetLibur" placeholder="Ketik keterangan...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Target Libur</label>
+                            <select class="form-select fw-bold" id="inputTargetLibur">
+                                <option value="semua">Semua (Guru, Siswa, Staf)</option>
+                                <option value="siswa">Hanya Siswa (Guru & Staf Masuk)</option>
+                                <option value="ptk">Hanya Guru (Siswa & Staf Masuk)</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary fw-bold w-100" onclick="simpanHariLibur()"><i class="fa-solid fa-plus me-2"></i>Tambahkan Libur</button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                            <thead class="table-light"><tr><th>Tgl Libur</th><th>Keterangan</th><th>Target</th><th>Aksi</th></tr></thead>
+                            <tbody id="tbHariLibur"><tr><td colspan="4" class="py-3 text-center text-muted">Memuat data...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-bottom-0 pt-3 pb-0 px-4">
+                    <h6 class="fw-bold mb-0 text-muted"><i class="fa-regular fa-clock me-2"></i>Referensi Jam Pelajaran</h6>
+                </div>
+                <div class="card-body p-3">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered text-center mb-0" style="font-size: 0.75rem;">
+                            <thead class="bg-light"><tr><th>Jam</th><th>Waktu</th><th>Jam</th><th>Waktu</th></tr></thead>
+                            <tbody>
+                                <tr><td>1</td><td>07.00 - 07.45</td><td>5</td><td>10.30 - 11.15</td></tr>
+                                <tr><td>2</td><td>07.45 - 08.30</td><td>6</td><td>11.15 - 12.00</td></tr>
+                                <tr><td>3</td><td>08.30 - 09.15</td><td>7</td><td>12.30 - 13.15</td></tr>
+                                <tr><td>4</td><td>09.15 - 10.00</td><td>8</td><td>13.15 - 14.00</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- KARTU PENGATURAN JAM SISWA -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-white border-bottom-0 pt-4 pb-2 px-4">
+        <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-user-clock text-warning me-2"></i>Pengaturan Jam Masuk Siswa</h5>
+    </div>
+    <div class="card-body px-4">
+        <div class="bg-light p-3 rounded-3 border mb-2">
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small fw-bold">Jam Masuk</label>
+                    <input type="time" class="form-control fw-bold" id="setJamMasukSiswa" value="07:00">
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-bold">Jam Pulang</label>
+                    <input type="time" class="form-control fw-bold" id="setJamPulangSiswa" value="15:00">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Toleransi Telat (Menit)</label>
+                <input type="number" class="form-control fw-bold" id="setToleransiSiswa" value="5" placeholder="Contoh: 5">
+                <small class="text-muted" style="font-size: 0.75rem;">*Lewat dari jam masuk + toleransi otomatis dapat poin <b>A1 (Terlambat)</b>.</small>
+            </div>
+            <button class="btn btn-warning fw-bold text-dark w-100" onclick="simpanJamSiswa()"><i class="fa-solid fa-floppy-disk me-2"></i>Simpan Jam Siswa</button>
+        </div>
+    </div>
+</div>
+        
+    </div>
+</div>
 
         <!-- ================= TAB ADMIN E-RAPORT (SUB-MENU) ================= -->
         <div id="tabAdminEraport" style="display:none;" class="p-2 bg-light rounded-4">
@@ -996,6 +1344,8 @@
                 </div>
             </div>
         </div>
+
+        
 
     </div> <!-- Akhir Gudang Konten -->
 
@@ -1150,6 +1500,7 @@
     <script src="absensi.js"></script>
     <script src="cetak_qr.js"></script>
     <script src="rekap_absensi.js"></script>
+    <script src="pengaturan_absen.js"></script>
     
     <!-- Register Service Worker untuk PWA -->
     <script>

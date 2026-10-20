@@ -361,6 +361,7 @@
     <audio id="audioError" src="beep-error.mp3"></audio>
 
 <!-- Script Supabase dan Logika Aplikasi -->
+<!-- Script Supabase dan Logika Aplikasi -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
     const SUPABASE_URL = 'https://rniggtkxtlblpvxaycrl.supabase.co';
@@ -384,9 +385,6 @@
     const statusCircleIcon = document.getElementById('statusCircleIcon');
     const statusTitleCard = document.getElementById('statusTitleCard');
     const statusMessageCard = document.getElementById('statusMessageCard');
-
-    // Elemen UI Pelanggaran (Tambahkan div khusus di HTML Anda untuk ini)
-    // Pastikan Anda sudah membuat <div id="pelanggaranContainer"></div> di dalam statusBoxKanan pada file HTML
     const pelanggaranContainer = document.getElementById('pelanggaranContainer'); 
 
     const audioSuccess = document.getElementById('audioSuccess');
@@ -407,9 +405,7 @@
     document.addEventListener('click', () => {
         document.getElementById('rfidInput').focus();
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => {
-                console.log(`Gagal fullscreen: ${err.message}`);
-            });
+            document.documentElement.requestFullscreen().catch(err => { console.log(err.message); });
         }
     });
 
@@ -421,16 +417,14 @@
             this.value = ''; 
             
             if(scannedUID !== '') {
-                // JIKA ADA KARTU BARU MASUK, BATALKAN HITUNGAN MUNDUR DAN LANGSUNG PROSES (NIBAN)
                 clearTimeout(resetTimer);
                 prosesAbsensi(scannedUID);
             }
         }
     });
 
-    // 4. Logika Utama Absensi (Supabase) dengan Tambahan Ambil Poin
+    // 4. Logika Utama Absensi & Auto-Keterlambatan (Masuk ke Antrean Admin)
     async function prosesAbsensi(uid) {
-        // Ambil data user
         const { data: user, error: userError } = await supabaseClient
             .from('users')
             .select('username, nama_lengkap, foto_profil, role, kelas')
@@ -442,54 +436,143 @@
             return;
         }
 
-        // === FITUR BARU: AMBIL TOTAL POIN PELANGGARAN ===
-        let totalPoin = 0;
-        let daftarPelanggaran = [];
-        
-        // Hanya cek pelanggaran jika dia siswa
-        if(user.role === 'siswa') {
-            const { data: pelanggaranData, error: pelError } = await supabaseClient
-                .from('log_pelanggaran')
-                .select('keterangan, poin')
-                .eq('nisn', user.username)
-                .order('tanggal', { ascending: false });
-
-            if (!pelError && pelanggaranData && pelanggaranData.length > 0) {
-                // Hitung total poin
-                totalPoin = pelanggaranData.reduce((sum, item) => sum + (item.poin || 0), 0);
-                // Ambil 3 pelanggaran terakhir untuk rincian
-                daftarPelanggaran = pelanggaranData.slice(0, 3); 
-            }
-        }
-        // ===============================================
-
         const now = new Date();
-        const tglHariIni = now.toLocaleDateString('en-CA'); 
-        const jamSekarang = now.toTimeString().split(' ')[0]; 
+        const tglHariIni = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        const jamSekarang = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
 
-        const { data: logHariIni, error: logError } = await supabaseClient
+        const { data: logHariIni } = await supabaseClient
             .from('log_absensi')
             .select('*')
             .eq('username', user.username)
             .eq('tanggal', tglHariIni)
             .maybeSingle();
 
+        let isTerlambat = false;
+        let jamMasukSetting = "07:00"; 
+
+        // ==============================================================
+        // TAHAP 4: CEK KETERLAMBATAN & KIRIM KE ANTREAN ADMIN
+        // ==============================================================
         if (!logHariIni) {
-            // PROSES MASUK
-            const { error: insertError } = await supabaseClient
-                .from('log_absensi')
-                .insert([{
-                    tanggal: tglHariIni,
-                    waktu_masuk: jamSekarang,
-                    username: user.username,
-                    role: user.role
-                }]);
+            const { data: config } = await supabaseClient.from('pengaturan_sekolah').select('*');
+            let toleransi = 5;
+            if (config) {
+                config.forEach(c => {
+                    if (c.key === 'jam_masuk_siswa') jamMasukSetting = c.value;
+                    if (c.key === 'toleransi_terlambat_menit') toleransi = parseInt(c.value) || 0;
+                });
+            }
+
+            let [hMasuk, mMasuk] = jamMasukSetting.split(':').map(Number);
+            let batasMenitTotal = (hMasuk * 60) + mMasuk + toleransi;
+
+            // KHUSUS PTK: Cek jadwal mengajar paling pagi hari ini
+            if (user.role !== 'siswa' && user.role !== 'admin') {
+                const namaHariArr = ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
+                const hariIniStr = namaHariArr[now.getDay()];
+                let kodeBersih = (user.username || "").toString().replace(/[a-zA-Z]/g, '');
+                
+                const { data: jadwalHariIni } = await supabaseClient.from('jadwal_mengajar')
+                    .select('jam_ke')
+                    .eq('hari', hariIniStr)
+                    .or(`kode_guru.eq.${user.username},kode_guru.eq.${kodeBersih}`)
+                    .order('jam_ke', { ascending: true })
+                    .limit(1);
+
+                if (jadwalHariIni && jadwalHariIni.length > 0) {
+                    let jamPertama = jadwalHariIni[0].jam_ke;
+                    let mapJam = {1:"07:00", 2:"07:45", 3:"08:30", 4:"09:15", 5:"10:30", 6:"11:15", 7:"12:30", 8:"13:15"};
+                    jamMasukSetting = mapJam[jamPertama] || "07:00";
+                    [hMasuk, mMasuk] = jamMasukSetting.split(':').map(Number);
+                    batasMenitTotal = (hMasuk * 60) + mMasuk + toleransi;
+                } else {
+                    // Bebas tugas
+                    batasMenitTotal = 9999;
+                }
+            }
+
+            let [hSekarang, mSekarang] = jamSekarang.split(':').map(Number);
+            let menitSekarangTotal = (hSekarang * 60) + mSekarang;
+
+            // JIKA TERLAMBAT
+            if (menitSekarangTotal > batasMenitTotal) {
+                isTerlambat = true;
+                
+                // HANYA SISWA yang dilaporkan ke Admin
+                if (user.role === 'siswa') {
+                    const { data: CekLapor } = await supabaseClient
+                        .from('log_pelanggaran')
+                        .select('id_log')
+                        .eq('nisn', user.username)
+                        .eq('kode_pelanggaran', 'A1')
+                        .gte('tanggal', tglHariIni)
+                        .maybeSingle();
+
+                    // Buat ID Log unik otomatis (Format: AUTO-Timestamp)
+                    let generatedIdLog = 'AUTO-' + new Date().getTime();
+
+                    // Insert ke Log Pelanggaran dengan status 'Pending'
+                    if (!CekLapor) {
+                        const { error: insertPelanggaranError } = await supabaseClient.from('log_pelanggaran').insert([{
+                            id_log: generatedIdLog, // Wajib diisi sesuai SQL Anda
+                            nisn: user.username,
+                            kode_pelanggaran: 'A1',
+                            poin: 5,
+                            keterangan: `[Sistem] Terlambat masuk (Scan RFID jam ${jamSekarang.substring(0,5)})`,
+                            pelapor: 'Sistem',
+                            status: 'Pending', // Sesuai kolom di SQL Anda
+                            tanggal: new Date().toISOString() // Format timestamp yang valid
+                        }]);
+                        
+                        if (insertPelanggaranError) console.error("Gagal simpan pelanggaran:", insertPelanggaranError);
+                    }
+                }
+            }
+        }
+        // ==============================================================
+
+        // 3. AMBIL TOTAL POIN PELANGGARAN YANG SUDAH DISETUJUI ADMIN
+        let totalPoin = 0;
+        let daftarPelanggaran = [];
+        
+        if (user.role === 'siswa') {
+            const { data: pelanggaranData } = await supabaseClient
+                .from('log_pelanggaran')
+                .select('keterangan, poin, tanggal')
+                .eq('nisn', user.username)
+                .eq('status', 'Disetujui') // Sesuai kolom di SQL Anda
+                .order('tanggal', { ascending: false });
+
+            if (pelanggaranData && pelanggaranData.length > 0) {
+                totalPoin = pelanggaranData.reduce((sum, item) => sum + (item.poin || 0), 0);
+                daftarPelanggaran = pelanggaranData.slice(0, 3); 
+            }
+        }
+
+        // 4. SIMPAN ABSENSI KE DATABASE
+        if (!logHariIni) {
+            // EKSEKUSI MASUK
+            const { error: insertError } = await supabaseClient.from('log_absensi').insert([{
+                tanggal: tglHariIni,
+                waktu_masuk: jamSekarang,
+                username: user.username,
+                role: user.role
+            }]);
             
             if (!insertError) {
-                tampilkanSukses(user, "MASUK", jamSekarang, "ABSENSI BERHASIL", "Terima kasih sudah melakukan absensi", totalPoin, daftarPelanggaran);
+                let statHadir = isTerlambat ? "TERLAMBAT" : "MASUK";
+                let judulMsg = isTerlambat ? "ANDA TERLAMBAT!" : "ABSENSI BERHASIL";
+                
+                let pesanMsg = "Terima kasih sudah melakukan absensi hari ini.";
+                if (isTerlambat) {
+                    if (user.role === 'siswa') pesanMsg = `Batas jam masuk adalah ${jamMasukSetting}. Laporan keterlambatan dikirim ke Admin.`;
+                    else pesanMsg = `Anda melewati jam masuk jadwal mengajar (${jamMasukSetting}).`;
+                }
+
+                tampilkanSukses(user, statHadir, jamSekarang, judulMsg, pesanMsg, totalPoin, daftarPelanggaran);
             }
         } else {
-            // LOGIKA PULANG / DOUBLE TAP
+            // EKSEKUSI PULANG
             if (logHariIni.waktu_pulang) {
                 tampilkanError("SUDAH ABSEN PULANG", `Anda sudah absen pulang hari ini.`);
                 return;
@@ -500,138 +583,133 @@
             const selisihMenit = Math.floor((now - waktuMasukDate) / (1000 * 60));
 
             if (selisihMenit < 5) {
-                tampilkanError("TERLALU CEPAT", `Jeda absen minimal 5 menit.`);
+                tampilkanError("TERLALU CEPAT", `Jeda absen minimal 5 menit dari absen masuk.`);
                 return;
             }
 
-            // PROSES PULANG
             const { error: updateError } = await supabaseClient
                 .from('log_absensi')
                 .update({ waktu_pulang: jamSekarang })
                 .eq('id', logHariIni.id);
 
             if (!updateError) {
-                tampilkanSukses(user, "PULANG", jamSekarang, "ABSENSI PULANG BERHASIL", "Hati-hati di jalan pulang", totalPoin, daftarPelanggaran);
+                tampilkanSukses(user, "PULANG", jamSekarang, "ABSENSI PULANG BERHASIL", "Hati-hati di jalan pulang!", totalPoin, daftarPelanggaran);
             }
         }
     }
 
     // 5. MENGATUR UI SUKSES
     function tampilkanSukses(user, statusKehadiran, jamAksi, judulStatus, pesanStatus, totalPoin, daftarPelanggaran) {
-        audioSuccess.currentTime = 0;
-        audioSuccess.play().catch(e => console.log('Audio pending'));
+        if (statusKehadiran === "TERLAMBAT") {
+            audioError.currentTime = 0; audioError.play().catch(e => {});
+        } else {
+            audioSuccess.currentTime = 0; audioSuccess.play().catch(e => {});
+        }
 
-        // Isi Data Identitas
         scanPhoto.src = user.foto_profil ? user.foto_profil : `https://ui-avatars.com/api/?name=${user.nama_lengkap}&background=0d7c54&color=fff&size=512`;
         scanNISN.innerText = user.username;
         scanName.innerText = user.nama_lengkap;
         
-        // Logika Kelas / Jabatan
-        if (user.role === 'siswa') {
-            scanKelas.innerText = user.kelas ? user.kelas : 'Siswa';
-        } else if (user.role === 'guru' || user.role === 'walikelas') {
-            scanKelas.innerText = `Guru ${user.kelas ? '- ' + user.kelas : ''}`;
-        } else {
-            scanKelas.innerText = user.role.toUpperCase();
-        }
+        if (user.role === 'siswa') scanKelas.innerText = user.kelas ? user.kelas : 'Siswa';
+        else if (user.role === 'guru' || user.role === 'walikelas') scanKelas.innerText = `Guru ${user.kelas ? '- ' + user.kelas : ''}`;
+        else scanKelas.innerText = user.role.toUpperCase();
 
-        // Isi Badge dan Waktu
-        scanStatusBadge.className = 'status-badge bg-success';
-        scanStatusBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>${statusKehadiran}</span>`;
-        
         const formatTglSingkat = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
         scanTime.innerText = `${formatTglSingkat} • ${jamAksi}`;
 
-        // Reset class box kanan ke warna hijau sukses
-        statusBoxKanan.className = 'status-section';
-        statusCircleIcon.innerHTML = '<i class="fa-solid fa-check"></i>';
+        // PERUBAHAN UI WARNA BADGE & STATUS
+        if (statusKehadiran === "TERLAMBAT") {
+            scanStatusBadge.className = 'status-badge bg-danger text-white';
+            scanStatusBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>TERLAMBAT</span>`;
+            statusBoxKanan.className = 'status-section error'; 
+            statusCircleIcon.innerHTML = '<i class="fa-solid fa-exclamation"></i>';
+        } else if (statusKehadiran === "PULANG") {
+            scanStatusBadge.className = 'status-badge bg-info text-dark';
+            scanStatusBadge.innerHTML = `<i class="fa-solid fa-house"></i> <span>PULANG</span>`;
+            statusBoxKanan.className = 'status-section';
+            statusCircleIcon.innerHTML = '<i class="fa-solid fa-check"></i>';
+        } else {
+            scanStatusBadge.className = 'status-badge bg-success';
+            scanStatusBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>MASUK</span>`;
+            statusBoxKanan.className = 'status-section';
+            statusCircleIcon.innerHTML = '<i class="fa-solid fa-check"></i>';
+        }
+        
         statusTitleCard.innerText = judulStatus;
         statusMessageCard.innerText = pesanStatus;
 
-        // === RENDER POIN PELANGGARAN DI LAYAR ===
-        // === RENDER POIN PELANGGARAN DI LAYAR ===
+        // RENDER POIN PELANGGARAN DI LAYAR (Hanya Siswa)
         if (pelanggaranContainer) {
             if (user.role === 'siswa') {
                 if (totalPoin > 0) {
-                    // Tampilan jika ada poin pelanggaran (Warna Merah)
-                    let listPelanggaranHTML = daftarPelanggaran.map(p => 
-                        `<li style="font-size: 0.9rem; color: #555;">${p.keterangan} <span class="text-danger fw-bold">(+${p.poin})</span></li>`
-                    ).join('');
+                    let listPelanggaranHTML = daftarPelanggaran.map(p => {
+                        let tglFormat = new Date(p.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+                        return `<li style="font-size: 0.85rem; color: #555;" class="mb-1">
+                                    <span class="fw-bold">${tglFormat}</span> - ${p.keterangan} <span class="text-danger fw-bold">(+${p.poin})</span>
+                                </li>`;
+                    }).join('');
 
                     pelanggaranContainer.innerHTML = `
-                        <div class="mt-4 p-3 border rounded bg-light" style="border-left: 5px solid #dc3545 !important;">
-                            <h5 class="text-danger fw-bold mb-1">TOTAL POIN PELANGGARAN: <span style="font-size: 2rem;">${totalPoin}</span></h5>
-                            <p class="mb-2 text-muted" style="font-size: 0.85rem;">Terakhir kali tercatat:</p>
-                            <ul class="mb-0 text-start">
+                        <div class="mt-4 p-3 border rounded bg-light text-start" style="border-left: 5px solid #dc3545 !important;">
+                            <h6 class="text-danger fw-bold mb-1 text-center">TOTAL POIN PELANGGARAN: <span style="font-size: 1.8rem; display:block;">${totalPoin}</span></h6>
+                            <p class="mb-2 text-muted mt-2" style="font-size: 0.85rem;">Terakhir kali tercatat:</p>
+                            <ul class="mb-0 text-start ps-3">
                                 ${listPelanggaranHTML}
                             </ul>
                         </div>
                     `;
                 } else {
-                    // Tampilan apresiasi jika poin 0 (Warna Hijau)
                     pelanggaranContainer.innerHTML = `
                         <div class="mt-4 p-3 border rounded bg-light" style="border-left: 5px solid #198754 !important;">
                             <h5 class="text-success fw-bold mb-1">TOTAL POIN PELANGGARAN: <span style="font-size: 2rem;">0</span></h5>
                             <p class="mb-0 text-dark" style="font-size: 0.95rem;">
-                                <i class="fa-solid fa-star text-warning"></i> <b>Luar Biasa!</b> Terima kasih sudah mematuhi tata tertib. Pertahankan kedisiplinanmu!
+                                <i class="fa-solid fa-star text-warning"></i> <b>Luar Biasa!</b> Terima kasih sudah mematuhi tata tertib.
                             </p>
                         </div>
                     `;
                 }
                 pelanggaranContainer.classList.remove('d-none');
             } else {
-                // Sembunyikan jika yang absen adalah Guru / Staf
+                // Sembunyikan poin sepenuhnya untuk Guru / PTK / Staf
                 pelanggaranContainer.innerHTML = '';
                 pelanggaranContainer.classList.add('d-none');
             }
         }
-        // ========================================
-        // ========================================
 
-        // Transisi Layar
         standbyArea.classList.add('d-none');
         profileArea.classList.remove('d-none');
-
-        // DURASI TAMPIL DIUBAH MENJADI 10 DETIK (10000 ms)
         resetTimer = setTimeout(() => kembalikanKeStandby(), 10000);
     }
 
     // 6. MENGATUR UI ERROR
     function tampilkanError(judulError, pesanError) {
         audioError.currentTime = 0;
-        audioError.play().catch(e => console.log('Audio pending'));
+        audioError.play().catch(e => {});
 
-        // Isi dengan data kosong/merah
         scanPhoto.src = 'https://ui-avatars.com/api/?name=X&background=dc3545&color=fff&size=512';
         scanNISN.innerText = "-";
         scanName.innerText = "AKSES DITOLAK";
         scanKelas.innerText = "-";
         scanTime.innerText = "-";
 
-        scanStatusBadge.className = 'status-badge error';
+        scanStatusBadge.className = 'status-badge error bg-danger';
         scanStatusBadge.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> <span>GAGAL</span>`;
 
-        // Ubah box kanan jadi warna merah error
         statusBoxKanan.className = 'status-section error';
         statusCircleIcon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
         statusTitleCard.innerText = judulError;
         statusMessageCard.innerText = pesanError;
 
-        // Sembunyikan container poin jika error
         if (pelanggaranContainer) {
             pelanggaranContainer.innerHTML = '';
             pelanggaranContainer.classList.add('d-none');
         }
 
-        // Transisi Layar
         standbyArea.classList.add('d-none');
         profileArea.classList.remove('d-none');
-
-        // DURASI TAMPIL DIUBAH MENJADI 10 DETIK (10000 ms)
         resetTimer = setTimeout(() => kembalikanKeStandby(), 10000); 
     }
 
-    // Fungsi Pembantu untuk mengembalikan layar
     function kembalikanKeStandby() {
         profileArea.classList.add('d-none');
         standbyArea.classList.remove('d-none');

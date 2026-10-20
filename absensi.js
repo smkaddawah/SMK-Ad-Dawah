@@ -108,10 +108,59 @@ async function prosesScanQR(usernameScanned) {
         document.getElementById("scanKelasResult").innerText = res.user.kelas || "Guru";
         
         // Pesan status absen
+        // Pesan status absen
         if (res.kondisi === "masuk") {
             boxStatus.className = "alert alert-success py-2 fw-bold mb-0 text-wrap";
             boxStatus.innerHTML = `Masuk Berhasil<br><small>${res.waktu}</small>`;
             if(typeof bunyikanBeep === 'function') bunyikanBeep();
+
+            // =================================================================
+            // TAHAP 4: CEK KETERLAMBATAN OTOMATIS VIA QR ADMIN
+            // =================================================================
+            if ((res.user.role === 'siswa' || !res.user.kelas.includes("Guru")) && typeof supabaseClient !== 'undefined') {
+                try {
+                    const tglHariIni = new Date().toLocaleDateString('en-CA');
+                    const jamSekarang = new Date().toTimeString().split(' ')[0];
+                    
+                    const { data: config } = await supabaseClient.from('pengaturan_sekolah').select('*');
+                    let jamMasuk = "07:00", toleransi = 5;
+                    if (config) {
+                        config.forEach(c => {
+                            if (c.key === 'jam_masuk_siswa') jamMasuk = c.value;
+                            if (c.key === 'toleransi_terlambat_menit') toleransi = parseInt(c.value) || 0;
+                        });
+                    }
+
+                    let [hMasuk, mMasuk] = jamMasuk.split(':').map(Number);
+                    let batasMenitTotal = (hMasuk * 60) + mMasuk + toleransi;
+                    let [hSekarang, mSekarang] = jamSekarang.split(':').map(Number);
+                    let menitSekarangTotal = (hSekarang * 60) + mSekarang;
+
+                    if (menitSekarangTotal > batasMenitTotal) {
+                        const { data: cekTelat } = await supabaseClient
+                            .from('log_pelanggaran')
+                            .select('id')
+                            .eq('nisn', res.user.username)
+                            .eq('kode_pelanggaran', 'A1')
+                            .gte('tanggal', tglHariIni)
+                            .maybeSingle();
+
+                        if (!cekTelat) {
+                            await supabaseClient.from('log_pelanggaran').insert([{
+                                nisn: res.user.username,
+                                kode_pelanggaran: 'A1',
+                                poin: 5,
+                                keterangan: `[Sistem Auto] Terlambat masuk (Scan QR jam ${jamSekarang.substring(0,5)})`,
+                                pelapor: 'Sistem Admin QR',
+                                status_verifikasi: 'Disetujui',
+                                tanggal: tglHariIni
+                            }]);
+                        }
+                    }
+                } catch(e) { console.log("Cek telat background error", e); }
+            }
+            // =================================================================
+
         } else if (res.kondisi === "pulang") {
             boxStatus.className = "alert alert-primary py-2 fw-bold mb-0 text-wrap";
             boxStatus.innerHTML = `Pulang Berhasil<br><small>${res.waktu}</small>`;

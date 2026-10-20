@@ -3820,7 +3820,17 @@ function bukaHalamanApp(idMenu, judul) {
             else if(tabName === 'guru') idTabHtml = 'tabGuru';
             else if(tabName === 'kamus') idTabHtml = 'tabKamus';
             else if(tabName === 'rekap') idTabHtml = 'tabRekap';
-            else if(tabName === 'rekapabsen') idTabHtml = 'tabRekapAbsen';
+            else if(tabName === 'rekapabsen') {
+                idTabHtml = 'tabRekapAbsen';
+                if(typeof loadPilihanTahunAjaran === 'function') loadPilihanTahunAjaran();
+                if(typeof loadPilihanKelas === 'function') loadPilihanKelas();
+            }
+            else if(tabName === 'pengaturanabsen') {
+    idTabHtml = 'tabPengaturanAbsen';
+    if(typeof loadPreviewJadwal === 'function') loadPreviewJadwal();
+    if(typeof loadDataLibur === 'function') loadDataLibur();
+    if(typeof loadSettingJamSiswa === 'function') loadSettingJamSiswa();
+}
             else if(tabName === 'absensi') idTabHtml = 'tabAbsensi';
             else if(tabName === 'cetakqr') {
                 idTabHtml = 'tabCetakQR';
@@ -6221,4 +6231,4 @@ function tampilkanAlertRFID(pesan, tipe) {
     setTimeout(() => {
         alertBox.classList.add('d-none');
     }, 4000);
-}
+} 
