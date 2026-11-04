@@ -6300,3 +6300,17 @@ function tampilkanAlertRFID(pesan, tipe) {
         alertBox.classList.add('d-none');
     }, 4000);
 } 
+
+// =================================================================
+// DIRECT LINK KE WEB CBT
+// =================================================================
+window.bukaWebCBT = function() {
+    // Ubah URL di bawah ini dengan link Web CBT aslimu
+    const urlCBT = "https://ujian.cbtsmkpksmkaddawah.my.id/"; 
+    
+    // Ini akan langsung membuka web CBT di tab/halaman yang sama
+    window.location.href = urlCBT;
+    
+    // Jika kamu ingin CBT terbuka di tab baru, gunakan kode ini dan hapus kode di atas:
+    // window.open(urlCBT, "_blank");
+};
