@@ -406,6 +406,9 @@ async function handleLogin(event) {
     const passInput = document.getElementById('loginPass').value.trim();
     const btnLogin = document.getElementById('btnLogin');
     
+    // PERBAIKAN 1: Gunakan roleInput (bukan role) agar tidak terjadi ReferenceError
+    const roleDicari = (roleInput === 'orangtua') ? 'siswa' : roleInput;
+    
     // Ubah tombol jadi loading agar user tahu sistem sedang bekerja
     if (btnLogin) {
         btnLogin.disabled = true;
@@ -417,7 +420,7 @@ async function handleLogin(event) {
             .from('users')
             .select('*')
             .eq('username', userInput)
-            .eq('role', roleInput)
+            .eq('role', roleDicari)
             .single();
 
         if (error || !data) {
@@ -428,10 +431,13 @@ async function handleLogin(event) {
             throw new Error("Kata sandi salah! Silakan coba lagi.");
         }
 
-        // --- PERBAIKAN 1: Bentuk ulang format data agar bisa dibaca fungsi utama ---
+        // PERBAIKAN 2: Tentukan role akhir yang akan disimpan di sesi (Jika ortu, simpan sebagai ortu, bukan siswa)
+        const finalRole = (roleInput === 'orangtua') ? 'orangtua' : data.role;
+
+        // Bentuk ulang format data agar bisa dibaca fungsi utama
         let payloadRes = {
             status: "sukses",
-            role: data.role,
+            role: finalRole, // <-- Menggunakan role akhir
             identitas: data.username,
             nama: data.nama_lengkap || data.username,
             kelas: data.kelas,
@@ -443,14 +449,14 @@ async function handleLogin(event) {
         let sesiData = {
             username: data.username,
             nama_lengkap: data.nama_lengkap || data.nama,
-            role: data.role,
+            role: finalRole, // <-- Simpan role orangtua agar halaman orangtua.html mengenalinya
             kelas: data.kelas,
             identitas: data.username,
             pin_bawah: data.pin_bawah // Bawa data pin agar aman
         };
         localStorage.setItem('sesi_addawah', JSON.stringify(sesiData));
 
-        // --- PERBAIKAN 2: Jalankan proses secara terpusat (Sembunyikan login & render UI) ---
+        // Jalankan proses secara terpusat (Sembunyikan login & render UI)
         aktifkanTampilanUser(payloadRes);
 
     } catch (err) {
@@ -468,7 +474,18 @@ async function handleLogin(event) {
 function aktifkanTampilanUser(res) {
     currentUser = res;
 
-    // --- PERBAIKAN 3: Ambil nama dengan tepat agar tulisan "Selamat Datang" terisi ---
+    // PERBAIKAN 3: Tangkap navigasi Orang Tua dan Bendahara di awal sebelum merender UI
+    if (res.role === 'orangtua') {
+        window.location.href = "orangtua.html";
+        return; // Hentikan eksekusi script agar tidak merender UI siswa
+    }
+    
+    if (res.role === "bendahara") {
+        window.location.href = "bendahara.html";
+        return; // Hentikan eksekusi script di halaman ini
+    }
+
+    // Ambil nama dengan tepat agar tulisan "Selamat Datang" terisi
     let namaTampil = res.nama || res.nama_lengkap || res.username || "User";
     
     // Set nama user di header app
@@ -476,7 +493,7 @@ function aktifkanTampilanUser(res) {
         document.getElementById('txtAppNamaUser').innerText = namaTampil;
     }
 
-    // --- PERBAIKAN 4: Cegah CRASH saat memuat pin_bawah dari LocalStorage ---
+    // Cegah CRASH saat memuat pin_bawah dari LocalStorage
     let pinBawahData = '["home"]';
     if (res.rawData && res.rawData.pin_bawah) {
         pinBawahData = res.rawData.pin_bawah;
@@ -485,7 +502,7 @@ function aktifkanTampilanUser(res) {
     }
 
     // Render tampilan utama Mobile App dengan data aman
-    renderGridMenuApp(res.role, res.identitas, pinBawahData);
+    if(typeof renderGridMenuApp === 'function') renderGridMenuApp(res.role, res.identitas, pinBawahData);
     
     if(document.getElementById("loginSection")) document.getElementById("loginSection").style.display = "none";
     if(document.getElementById("userBadge")) document.getElementById("userBadge").style.setProperty("display", "flex", "important");
@@ -573,23 +590,23 @@ function aktifkanTampilanUser(res) {
         if(typeof initDashboardAbsensi === 'function') initDashboardAbsensi(res);
         if(typeof initWaliKelas === 'function') initWaliKelas(res.kelas); 
     }
-    
-    // 👇 Panggil saat user sukses masuk ke aplikasi
-    daftarNotifikasiHP();
+
+    // Panggil saat user sukses masuk ke aplikasi
+    if(typeof daftarNotifikasiHP === 'function') daftarNotifikasiHP();
 
     // ========================================================
-    // TUGAS BARU: MENGARAHKAN HALAMAN AWAL SAAT LOGIN (HOME)
+    // MENGARAHKAN HALAMAN AWAL SAAT LOGIN (HOME)
     // ========================================================
     setTimeout(function() {
         if (typeof bukaHalamanApp === 'function') {
             if (res.role === "admin" || res.role === "Admin") {
                 bukaHalamanApp('admin_stats', 'Dashboard');
             } else if (res.role === "siswa" || res.role === "Siswa") {
-                bukaHalamanApp('siswa_profil', 'Profil Saya'); // <--- Diperbaiki agar ID Menu sesuai
+                bukaHalamanApp('siswa_profil', 'Profil Saya');
             } else if (res.role === "guru" || res.role === "Guru") {
-                bukaHalamanApp('guru_profil', 'Profil & QR Code'); // <--- Diperbaiki agar ID Menu sesuai
+                bukaHalamanApp('guru_profil', 'Profil & QR Code');
             } else if (res.role === "walikelas" || res.role === "Wali Kelas") {
-                bukaHalamanApp('wali_siswa', 'Data Siswa'); // <--- Diperbaiki agar ID Menu sesuai
+                bukaHalamanApp('wali_siswa', 'Data Siswa');
             }
         }
     }, 300);
@@ -634,6 +651,7 @@ function switchAdminTab(tab, judulMenu) {
   if (tab === 'verif') { document.getElementById("tabVerif").style.display = "block"; loadPending(); }
   if (tab === 'lapor') { document.getElementById("tabLapor").style.display = "block"; }
   if (tab === 'siswa') { document.getElementById("tabSiswa").style.display = "block"; loadAllSiswa(); }
+  if (tab === 'ppdb') { document.getElementById("tabPPDB").style.display = "block"; if(typeof loadPPDB === 'function') loadPPDB(); }
   if (tab === 'kamus') { document.getElementById("tabKamus").style.display = "block"; loadKamus(); }
   if (tab === 'guru') { document.getElementById("tabGuru").style.display = "block"; if(typeof loadAllGuru === 'function') loadAllGuru(); }
   if (tab === 'rekap') { document.getElementById("tabRekap").style.display = "block"; persiapkanMenuRekap(); }
@@ -3528,6 +3546,7 @@ const daftarMenuApp = {
     'admin_eraport': { judul: 'Set E-Raport', icon: 'fa-cogs', color: 'bg-danger' },
     'admin_broadcast': { judul: 'Broadcast', icon: 'fa-bullhorn', color: 'bg-dark' },
     'admin_rfid': { judul: 'Daftar RFID', icon: 'fa-id-card', color: 'bg-success' },
+    'admin_ppdb': { judul: 'Kelola PPDB', icon: 'fa-users-viewfinder', color: 'bg-warning text-dark' },
 
     // --- MENU SISWA ---
     'siswa_profil': { judul: 'Profil', icon: 'fa-user-astronaut', color: 'bg-primary' },
@@ -3557,7 +3576,7 @@ const daftarMenuApp = {
 
 // 2. PEMBAGIAN HAK AKSES MENU SESUAI ROLE
 const menuPerRole = {
-    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport', 'admin_broadcast', 'admin_rfid'],
+    'admin': ['admin_stats', 'admin_verif', 'admin_lapor', 'admin_siswa', 'admin_guru', 'admin_kamus', 'admin_rekap', 'admin_rekapabsen', 'admin_absensi', 'admin_cetakqr', 'admin_eraport', 'admin_broadcast', 'admin_rfid', 'admin_ppdb'],
     'siswa': ['siswa_profil', 'siswa_logabsen', 'siswa_pelanggaran', 'siswa_izin', 'siswa_lapor', 'siswa_poin'],
     'guru': ['guru_profil', 'guru_logabsen', 'guru_lapor', 'guru_eraport'],
     'walikelas': ['wali_siswa', 'wali_absensi', 'wali_izin', 'wali_eraport']
@@ -3883,6 +3902,12 @@ function bukaHalamanApp(idMenu, judul) {
             let tabName = idMenu.replace('admin_', '');
             if(tabName === 'stats') idTabHtml = 'tabStats';
             else if(tabName === 'verif') idTabHtml = 'tabVerif';
+            // Tambahkan baris ini di deretan else if
+            else if(tabName === 'ppdb') {
+                idTabHtml = 'tabPPDB';
+                // Panggil langsung setelah jeda sangat kecil agar HTML sempat dirender di layar
+                setTimeout(() => { if (typeof loadDataPPDB === 'function') loadDataPPDB(); }, 100);
+            }
             else if(tabName === 'lapor') idTabHtml = 'tabLapor';
             else if(tabName === 'siswa') idTabHtml = 'tabSiswa';
             else if(tabName === 'guru') idTabHtml = 'tabGuru';
@@ -6313,4 +6338,446 @@ window.bukaWebCBT = function() {
     
     // Jika kamu ingin CBT terbuka di tab baru, gunakan kode ini dan hapus kode di atas:
     // window.open(urlCBT, "_blank");
+};
+
+// =================================================================
+// DIRECT LINK KE WEB PPDB
+// =================================================================
+window.bukaWebPPDB = function() {
+    window.location.href = "ppdb.html"; 
+};
+
+// =====================================================================
+// FUNGSI NAVIGASI KELOLA PPDB (ADMIN & BENDAHARA)
+// =====================================================================
+window.switchAdminPPDB = function(menu) {
+    // 1. Sembunyikan semua section PPDB
+    document.querySelectorAll('.sec-ppdb-admin').forEach(el => el.style.display = 'none');
+    
+    // 2. Hilangkan warna biru dari semua tombol tab PPDB
+    document.querySelectorAll('.btn-nav-ppdb').forEach(el => { 
+        el.classList.remove('active', 'bg-primary', 'text-white'); 
+    });
+    
+    // 3. Tampilkan section yang diklik
+    document.getElementById(`secPpdb_${menu}`).style.display = 'block';
+    
+    // 4. Beri warna biru pada tombol yang diklik
+    let btnActive = document.getElementById(`navPpdb_${menu}`);
+    if(btnActive) btnActive.classList.add('active', 'bg-primary', 'text-white');
+};
+
+// =====================================================================
+// MANAJEMEN ADMIN PPDB (VERIFIKASI PENDAFTARAN)
+// =====================================================================
+
+let globalDataPPDB = [];
+let modalDetailPPDBInstance;
+
+// Modifikasi fungsi switch agar otomatis menarik data saat Tab Data Pendaftar dibuka
+window.switchAdminPPDB = function(menu) {
+    document.querySelectorAll('.sec-ppdb-admin').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.btn-nav-ppdb').forEach(el => el.classList.remove('active', 'bg-primary', 'text-white'));
+    document.getElementById(`secPpdb_${menu}`).style.display = 'block';
+    
+    let btnActive = document.getElementById(`navPpdb_${menu}`);
+    if(btnActive) btnActive.classList.add('active', 'bg-primary', 'text-white');
+
+    // Jika tab Data Pendaftar ditekan, tarik data terbaru dari Supabase!
+    if (menu === 'data') {
+        loadDataPPDB();
+    }
+};
+
+window.loadDataPPDB = async function() {
+    const tb = document.getElementById("tbDataPPDB");
+    if(!tb) return;
+    
+    tb.innerHTML = '<tr><td colspan="6" class="py-5 text-center"><i class="fa-solid fa-spinner fa-spin text-success fs-2 mb-2"></i><br>Memuat data pendaftar...</td></tr>';
+    
+    // Ambil data terbaru dari tabel ppdb_siswa (diurutkan dari pendaftar paling baru)
+    const { data, error } = await supabaseClient.from('ppdb_siswa').select('*').order('created_at', { ascending: false });
+    
+    if (error) {
+        tb.innerHTML = `<tr><td colspan="6" class="text-danger py-4 text-center">Gagal memuat data: ${error.message}</td></tr>`;
+        return;
+    }
+    
+    globalDataPPDB = data || [];
+    renderTabelPPDB();
+};
+
+window.renderTabelPPDB = function() {
+    const tb = document.getElementById("tbDataPPDB");
+    const keyword = document.getElementById("cariDataPPDB").value.toLowerCase();
+    const filterStatus = document.getElementById("filterStatusPPDB").value; // "Menunggu" atau "Disetujui"
+    
+    // Saring data berdasarkan pencarian & filter status
+    let filteredData = globalDataPPDB.filter(s => {
+        let matchText = (s.nama_lengkap + " " + s.no_pendaftaran + " " + s.nisn).toLowerCase().includes(keyword);
+        let matchStatus = filterStatus === "" || s.status_pendaftaran === filterStatus;
+        return matchText && matchStatus;
+    });
+
+    if (filteredData.length === 0) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-muted py-4 text-center">Tidak ada data siswa yang cocok dengan filter pencarian.</td></tr>';
+        return;
+    }
+
+    tb.innerHTML = filteredData.map(s => {
+        let badgeStatus = s.status_pendaftaran === 'Disetujui' 
+            ? '<span class="badge bg-success shadow-sm"><i class="fa-solid fa-check me-1"></i>Diterima</span>'
+            : '<span class="badge bg-warning text-dark shadow-sm"><i class="fa-solid fa-hourglass-half me-1"></i>Menunggu</span>';
+            
+        return `
+        <tr>
+            <td class="fw-bold text-secondary">${s.no_pendaftaran}</td>
+            <td class="text-start">
+                <b class="text-dark" style="font-size:15px;">${s.nama_lengkap}</b><br>
+                <small class="text-muted">NISN: ${s.nisn}</small>
+            </td>
+            <td>${s.asal_sekolah}</td>
+            <td class="fw-bold">${s.no_hp}</td>
+            <td>${badgeStatus}</td>
+            <td>
+                <button class="btn btn-sm btn-info text-white fw-bold shadow-sm" onclick="bukaDetailPPDB('${s.id}')">
+                    <i class="fa-solid fa-eye me-1"></i> Cek & Proses
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+};
+
+window.bukaDetailPPDB = function(id) {
+    const siswa = globalDataPPDB.find(s => s.id === id);
+    if (!siswa) return;
+
+    // Foto & Label Kiri
+    document.getElementById("editPpdbId").value = siswa.id;
+    document.getElementById("detailPpdbNamaLayar").innerText = siswa.nama_lengkap.toUpperCase();
+    document.getElementById("detailPpdbNoDaftar").innerText = siswa.no_pendaftaran;
+    
+    const imgEl = document.getElementById("detailPpdbFoto");
+    imgEl.src = (siswa.foto_siswa && siswa.foto_siswa.trim() !== '') 
+                ? siswa.foto_siswa 
+                : `https://ui-avatars.com/api/?name=${siswa.nama_lengkap.replace(/\s/g, '+')}&background=e9ecef&color=495057`;
+
+    // --- A. Data Pribadi Utama ---
+    document.getElementById("editPpdbNama").value = siswa.nama_lengkap || "";
+    document.getElementById("editPpdbPanggilan").value = siswa.nama_panggilan || "";
+    document.getElementById("editPpdbJk").value = siswa.jenis_kelamin || "";
+    document.getElementById("editPpdbNisn").value = siswa.nisn || "";
+    document.getElementById("editPpdbNik").value = siswa.nik || "";
+    document.getElementById("editPpdbWn").value = siswa.kewarganegaraan || "";
+    document.getElementById("editPpdbTmptLahir").value = siswa.tempat_lahir || "";
+    document.getElementById("editPpdbTglLahir").value = siswa.tanggal_lahir || "";
+    document.getElementById("editPpdbAgama").value = siswa.agama || "";
+    document.getElementById("editPpdbAnakKe").value = siswa.anak_ke || "";
+    document.getElementById("editPpdbJmlSdr").value = siswa.jml_saudara || "";
+    document.getElementById("editPpdbHobi").value = siswa.hobi || "";
+    document.getElementById("editPpdbCita").value = siswa.cita_cita || "";
+    // Di dalam window.bukaDetailPPDB(id), pastikan mengisi jurusan & kelas_tujuan:
+    if (document.getElementById("editPpdbJurusan")) {
+        document.getElementById("editPpdbJurusan").value = siswa.jurusan || "TKJ";
+    }
+    if (document.getElementById("editPpdbKelasTujuan")) {
+        document.getElementById("editPpdbKelasTujuan").value = siswa.kelas_tujuan || `X ${siswa.jurusan || 'TKJ'} 1`;
+    }
+
+    // --- B. Alamat & Kontak ---
+    document.getElementById("editPpdbAlamat").value = siswa.alamat_lengkap || "";
+    document.getElementById("editPpdbHp").value = siswa.no_hp || "";
+    document.getElementById("editPpdbEmail").value = siswa.email || "";
+    document.getElementById("editPpdbJarak").value = siswa.jarak_sekolah || "";
+    document.getElementById("editPpdbTinggal").value = siswa.tinggal_bersama || "";
+
+    // --- C. Kesehatan ---
+    document.getElementById("editPpdbDarah").value = siswa.gol_darah || "";
+    document.getElementById("editPpdbTb").value = siswa.tinggi_badan || "";
+    document.getElementById("editPpdbBb").value = siswa.berat_badan || "";
+    document.getElementById("editPpdbPenyakit").value = siswa.riwayat_penyakit || "";
+
+    // --- D. Sekolah Asal ---
+    document.getElementById("editPpdbAsal").value = siswa.asal_sekolah || "";
+    document.getElementById("editPpdbNpsn").value = siswa.npsn_asal || "";
+    document.getElementById("editPpdbThnLulus").value = siswa.tahun_lulus || "";
+    document.getElementById("editPpdbAlamatAsal").value = siswa.alamat_sekolah_asal || "";
+    document.getElementById("editPpdbIjazah").value = siswa.no_ijazah || "";
+    document.getElementById("editPpdbNoUjian").value = siswa.no_peserta_ujian || "";
+
+    // --- E. Data Orang Tua ---
+    document.getElementById("editPpdbAyahNama").value = siswa.nama_ayah || "";
+    document.getElementById("editPpdbAyahPddk").value = siswa.pendidikan_ayah || "";
+    document.getElementById("editPpdbAyahKerja").value = siswa.pekerjaan_ayah || "";
+    document.getElementById("editPpdbAyahHp").value = siswa.no_hp_ayah || "";
+    
+    document.getElementById("editPpdbIbuNama").value = siswa.nama_ibu || "";
+    document.getElementById("editPpdbIbuPddk").value = siswa.pendidikan_ibu || "";
+    document.getElementById("editPpdbIbuKerja").value = siswa.pekerjaan_ibu || "";
+    document.getElementById("editPpdbIbuHp").value = siswa.no_hp_ibu || "";
+
+    // Atur tombol Approve (Sembunyikan jika sudah pernah di-Approve)
+    const btnApprove = document.getElementById("btnApprovePPDB");
+    if (siswa.status_pendaftaran === 'Disetujui') {
+        btnApprove.style.display = "none";
+    } else {
+        btnApprove.style.display = "block";
+    }
+
+    if(!modalDetailPPDBInstance) modalDetailPPDBInstance = new bootstrap.Modal(document.getElementById('modalDetailPPDB'));
+    modalDetailPPDBInstance.show();
+};
+
+window.simpanEditPPDB = async function() {
+    const id = document.getElementById("editPpdbId").value;
+    const nama = document.getElementById("editPpdbNama").value.trim();
+    const nisn = document.getElementById("editPpdbNisn").value.trim();
+    
+    if (!nama || !nisn) return showAlertBS("Perhatian", "Nama Lengkap dan NISN wajib diisi!", "warning");
+    
+    const btn = document.querySelector("#modalDetailPPDB .btn-primary");
+    const textLama = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Menyimpan...';
+    btn.disabled = true;
+
+    // Tarik dan Susun kembali semua data (termasuk integer parse)
+    const payload = {
+        nama_lengkap: nama,
+        nama_panggilan: document.getElementById("editPpdbPanggilan").value.trim(),
+        jenis_kelamin: document.getElementById("editPpdbJk").value,
+        nisn: nisn,
+        nik: document.getElementById("editPpdbNik").value.trim(),
+        kewarganegaraan: document.getElementById("editPpdbWn").value,
+        tempat_lahir: document.getElementById("editPpdbTmptLahir").value.trim(),
+        tanggal_lahir: document.getElementById("editPpdbTglLahir").value || null,
+        agama: document.getElementById("editPpdbAgama").value,
+        anak_ke: document.getElementById("editPpdbAnakKe").value ? parseInt(document.getElementById("editPpdbAnakKe").value) : null,
+        jml_saudara: document.getElementById("editPpdbJmlSdr").value ? parseInt(document.getElementById("editPpdbJmlSdr").value) : null,
+        hobi: document.getElementById("editPpdbHobi").value.trim(),
+        cita_cita: document.getElementById("editPpdbCita").value.trim(),
+        alamat_lengkap: document.getElementById("editPpdbAlamat").value.trim(),
+        no_hp: document.getElementById("editPpdbHp").value.trim(),
+        email: document.getElementById("editPpdbEmail").value.trim(),
+        jarak_sekolah: document.getElementById("editPpdbJarak").value.trim(),
+        tinggal_bersama: document.getElementById("editPpdbTinggal").value,
+        gol_darah: document.getElementById("editPpdbDarah").value,
+        tinggi_badan: document.getElementById("editPpdbTb").value ? parseInt(document.getElementById("editPpdbTb").value) : null,
+        berat_badan: document.getElementById("editPpdbBb").value ? parseInt(document.getElementById("editPpdbBb").value) : null,
+        riwayat_penyakit: document.getElementById("editPpdbPenyakit").value.trim(),
+        asal_sekolah: document.getElementById("editPpdbAsal").value.trim(),
+        npsn_asal: document.getElementById("editPpdbNpsn").value.trim(),
+        tahun_lulus: document.getElementById("editPpdbThnLulus").value.trim(),
+        alamat_sekolah_asal: document.getElementById("editPpdbAlamatAsal").value.trim(),
+        no_ijazah: document.getElementById("editPpdbIjazah").value.trim(),
+        no_peserta_ujian: document.getElementById("editPpdbNoUjian").value.trim(),
+        nama_ayah: document.getElementById("editPpdbAyahNama").value.trim(),
+        pendidikan_ayah: document.getElementById("editPpdbAyahPddk").value.trim(),
+        pekerjaan_ayah: document.getElementById("editPpdbAyahKerja").value.trim(),
+        no_hp_ayah: document.getElementById("editPpdbAyahHp").value.trim(),
+        nama_ibu: document.getElementById("editPpdbIbuNama").value.trim(),
+        pendidikan_ibu: document.getElementById("editPpdbIbuPddk").value.trim(),
+        pekerjaan_ibu: document.getElementById("editPpdbIbuKerja").value.trim(),
+        no_hp_ibu: document.getElementById("editPpdbIbuHp").value.trim()
+        
+    };
+
+    const { error } = await supabaseClient.from('ppdb_siswa').update(payload).eq('id', id);
+    
+    btn.innerHTML = textLama;
+    btn.disabled = false;
+
+    if (error) {
+        showAlertBS("Gagal", "Gagal mengupdate data: " + error.message, "error");
+    } else {
+        modalDetailPPDBInstance.hide();
+        showAlertBS("Tersimpan", "Data calon siswa berhasil diupdate.", "success");
+        loadDataPPDB(); // Segarkan tabel
+    }
+};
+
+// GANTI FUNGSI window.approveDataPPDB DI script.js DENGAN VERSI INTEGRASI PENUH INI:
+window.approveDataPPDB = async function() {
+    const id = document.getElementById("editPpdbId").value;
+    const siswa = globalDataPPDB.find(s => s.id === id);
+    if (!siswa) return;
+
+    const nama = document.getElementById("editPpdbNama").value.trim() || siswa.nama_lengkap;
+    const nik = document.getElementById("editPpdbNik").value.trim() || siswa.nik;
+    const nisn = document.getElementById("editPpdbNisn").value.trim() || siswa.nisn;
+    const jurusan = document.getElementById("editPpdbJurusan") ? document.getElementById("editPpdbJurusan").value : (siswa.jurusan || "TKJ");
+    const kelasTujuan = document.getElementById("editPpdbKelasTujuan") ? document.getElementById("editPpdbKelasTujuan").value.trim() : `X ${jurusan} 1`;
+    const tahunAjaran = siswa.tahun_ajaran || "2026/2027";
+
+    if (!nik) {
+        alert("PERHATIAN: NIK Siswa wajib diisi sebelum di-Approve karena NIK akan digunakan sebagai Username dan Password login siswa!");
+        return;
+    }
+
+    if (!confirm(`Setujui (Approve) pendaftaran ${nama}?\n\nSistem akan otomatis:\n1. Menempatkan siswa ke kelas ${kelasTujuan}\n2. Membuat akun login Siswa (Username: ${nik} | Password: ${nik})\n3. Mengirim data tagihan ke Kasir Bendahara.`)) {
+        return;
+    }
+
+    const btnApprove = document.getElementById("btnApprovePPDB");
+    const teksLama = btnApprove.innerHTML;
+    btnApprove.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i> Memproses Integrasi...';
+    btnApprove.disabled = true;
+
+    try {
+        // 1. Update status di ppdb_siswa
+        const { error: errPpdb } = await supabaseClient.from('ppdb_siswa').update({
+            nama_lengkap: nama,
+            nik: nik,
+            nisn: nisn,
+            jurusan: jurusan,
+            kelas_tujuan: kelasTujuan,
+            status_pendaftaran: 'Disetujui'
+        }).eq('id', id);
+
+        if (errPpdb) throw errPpdb;
+
+        // 2. Buat / Update Akun Siswa di tabel `users` (Username = NIK, Password = NIK)
+        const userPayload = {
+            username: String(nik),
+            password: String(nik),
+            nama_lengkap: nama,
+            role: 'siswa',
+            kelas: kelasTujuan,
+            jenis_kelamin: (siswa.jenis_kelamin === 'Laki-laki' || siswa.jenis_kelamin === 'L') ? 'L' : 'P',
+            tempat_lahir: siswa.tempat_lahir || '',
+            tanggal_lahir: siswa.tanggal_lahir || null,
+            agama: siswa.agama || 'Islam',
+            alamat: siswa.alamat_lengkap || '',
+            no_hp: siswa.no_hp || '',
+            email: siswa.email || '',
+            nama_ayah: siswa.nama_ayah || '',
+            no_hp_ayah: siswa.no_hp_ayah || '',
+            nama_ibu: siswa.nama_ibu || '',
+            no_hp_ibu: siswa.no_hp_ibu || '',
+            foto_profil: siswa.foto_siswa || null
+        };
+
+        const { error: errUser } = await supabaseClient.from('users').upsert([userPayload], { onConflict: 'username' });
+        if (errUser) throw new Error("Gagal membuat akun siswa: " + errUser.message);
+
+        // 3. Cek apakah sudah punya Invoice di Bendahara (Cegah Duplikat!)
+        const { data: existingInv } = await supabaseClient
+            .from('student_invoices')
+            .select('id')
+            .or(`ppdb_id.eq.${id},username_siswa.eq.${nik}`)
+            .maybeSingle();
+
+        let invoiceId = existingInv ? existingInv.id : null;
+
+        // Ambil semua item pembayaran aktif yang cocok untuk Kelas X & Jurusan siswa
+        const { data: allItems } = await supabaseClient
+            .from('payment_items')
+            .select('*, payment_item_targets(*)')
+            .eq('status_aktif', true)
+            .eq('tahun_ajaran', tahunAjaran);
+
+        let matchedItems = [];
+        if (allItems && allItems.length > 0) {
+            allItems.forEach(item => {
+                const klsMatch = item.target_kelas === 'Semua' || item.target_kelas.split(',').map(s => s.trim()).includes('X') || item.target_kelas.includes(kelasTujuan);
+                const jurMatch = item.target_jurusan === 'Semua' || item.target_jurusan.split(',').map(s => s.trim()).includes(jurusan);
+                if (klsMatch && jurMatch) {
+                    matchedItems.push(item);
+                }
+            });
+        }
+
+        const totalAwal = matchedItems.reduce((acc, it) => acc + Number(it.nominal || 0), 0);
+
+        if (!invoiceId) {
+            const noInv = `INV-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+            const { data: newInv, error: errInv } = await supabaseClient
+                .from('student_invoices')
+                .insert([{
+                    no_invoice: noInv,
+                    ppdb_id: id,
+                    username_siswa: String(nik),
+                    nisn: String(nisn),
+                    nik: String(nik),
+                    no_pendaftaran: siswa.no_pendaftaran,
+                    nama_siswa: nama,
+                    kelas: kelasTujuan,
+                    jurusan: jurusan,
+                    tahun_ajaran: tahunAjaran,
+                    no_hp: siswa.no_hp || '',
+                    nama_wali: siswa.nama_ayah || siswa.nama_ibu || '',
+                    total_tagihan: totalAwal,
+                    total_dibayar: 0,
+                    sisa_tagihan: totalAwal,
+                    status_tagihan: 'Belum Bayar'
+                }])
+                .select()
+                .single();
+
+            if (errInv) throw new Error("Gagal membuat tagihan Bendahara: " + errInv.message);
+            invoiceId = newInv.id;
+        }
+
+        // Masukkan rincian item ke invoice_details (jika ada item aktif)
+        if (invoiceId && matchedItems.length > 0) {
+            const detailsPayload = matchedItems.map(it => ({
+                invoice_id: invoiceId,
+                item_id: it.id,
+                nama_item: it.nama_item,
+                kategori: it.kategori,
+                nominal_tagihan: Number(it.nominal),
+                jumlah_dibayar: 0,
+                sisa_item: Number(it.nominal),
+                tgl_jatuh_tempo: it.tgl_jatuh_tempo || null,
+                status_item: 'Belum Bayar'
+            }));
+
+            await supabaseClient.from('invoice_details').upsert(detailsPayload, { onConflict: 'invoice_id,item_id,nama_item', ignoreDuplicates: true });
+        }
+
+        // 4. Catat ke Audit Log Keuangan
+        await supabaseClient.from('financial_audit_logs').insert([{
+            aksi: 'APPROVE_PPDB_DAN_BUAT_TAGIHAN',
+            entitas: 'ppdb_siswa',
+            entitas_id: id,
+            nilai_sebelum: { status: 'Menunggu' },
+            nilai_sesudah: { status: 'Disetujui', username_login: nik, kelas: kelasTujuan, total_tagihan_awal: totalAwal },
+            dilakukan_oleh: currentUser ? (currentUser.nama || currentUser.username) : 'Admin PPDB'
+        }]);
+
+        modalDetailPPDBInstance.hide();
+        showAlertBS(
+            "Integrasi Berhasil!",
+            `Siswa ${nama} resmi diterima di kelas ${kelasTujuan}.\nAkun Login Siswa (Username & Password: ${nik}) dan Tagihan Bendahara telah aktif!`,
+            "success"
+        );
+        loadDataPPDB();
+
+    } catch (err) {
+        console.error(err);
+        showAlertBS("Gagal Memproses", err.message, "error");
+    } finally {
+        btnApprove.innerHTML = teksLama;
+        btnApprove.disabled = false;
+    }
+};
+
+window.hapusDataPPDB = async function() {
+    const id = document.getElementById("editPpdbId").value;
+    const nama = document.getElementById("detailPpdbNamaLayar").innerText;
+
+    // 1. Konfirmasi hapus yang aman dari bentrok layar
+    if (!confirm(`PERINGATAN!\n\nYakin ingin menghapus permanen data pendaftaran ${nama}? Data tidak bisa dikembalikan.`)) {
+        return;
+    }
+
+    // 2. Eksekusi Hapus ke Supabase
+    const { error } = await supabaseClient.from('ppdb_siswa').delete().eq('id', id);
+    
+    if (error) {
+        showAlertBS("Gagal", "Sistem gagal menghapus: " + error.message, "error");
+    } else {
+        modalDetailPPDBInstance.hide();
+        showAlertBS("Terhapus", "Data pendaftaran berhasil dibatalkan/dihapus.", "success");
+        loadDataPPDB(); // Tabel akan otomatis refresh
+    }
 };

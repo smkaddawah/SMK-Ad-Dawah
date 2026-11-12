@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pendaftaran PPDB - SMK Ad-Da'Wah</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { background-color: #f4f7f6; }
+        .ppdb-header { background: linear-gradient(135deg, #198754 0%, #20c997 100%); padding: 40px 20px; color: white; text-align: center; border-bottom-left-radius: 40px; border-bottom-right-radius: 40px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(25, 135, 84, 0.2); }
+        .form-section { background: white; border-radius: 15px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px; padding: 25px; }
+        .section-title { font-weight: 700; color: #198754; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; margin-bottom: 20px; text-transform: uppercase; font-size: 1.1rem; }
+        .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; }
+        .form-control, .form-select { background-color: #f8f9fa; border-radius: 8px; border: 1px solid #ced4da; padding: 10px 15px; }
+        .form-control:focus, .form-select:focus { border-color: #198754; box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25); }
+    </style>
+</head>
+<body>
+
+    <div class="ppdb-header">
+        <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" width="70" alt="Logo" class="mb-2">
+        <h2 class="fw-bold mb-1">FORMULIR PENDAFTARAN SISWA BARU</h2>
+        <h5 class="fw-light mb-3">SMK AD-DA'WAH JAKARTA TAHUN 2026-2027</h5>
+        <a href="index.html" class="btn btn-light btn-sm fw-bold rounded-pill px-4 text-success shadow-sm"><i class="fa-solid fa-arrow-left me-2"></i>Kembali ke Beranda</a>
+    </div>
+
+    <div class="container pb-5" style="max-width: 900px;">
+        <div class="alert alert-warning shadow-sm border-0 rounded-3 mb-4 fw-bold">
+            <i class="fa-solid fa-circle-info me-2"></i> Silakan isi data di bawah ini dengan benar dan lengkap sesuai dengan Kartu Keluarga (KK) dan Ijazah.
+        </div>
+
+        <form id="formPPDB" onsubmit="submitPPDB(event)">
+            
+            <!-- A. DATA CALON SISWA -->
+            <div class="form-section">
+                <div class="section-title"><i class="fa-solid fa-user-graduate me-2"></i>A. Data Calon Siswa</div>
+                <div class="row g-3">
+                    <div class="col-md-8"><label class="form-label">Nama Lengkap Siswa <span class="text-danger">*</span></label><input type="text" class="form-control" id="ppdbNama" required></div>
+                    <div class="col-md-4"><label class="form-label">Nama Panggilan</label><input type="text" class="form-control" id="ppdbPanggilan"></div>
+                    <div class="col-md-6"><label class="form-label">Jenis Kelamin <span class="text-danger">*</span></label>
+                        <select class="form-select" id="ppdbJk" required>
+                            <option value="">- Pilih -</option><option value="Laki-laki">Laki-laki</option><option value="Perempuan">Perempuan</option>
+                        </select>
+                    </div>
+                    <!-- TAMBAHKAN PILIHAN JURUSAN INI DI BAGIAN A (ppdb.html) -->
+                    <div class="col-md-12">
+                        <label class="form-label text-success fw-bold">Pilihan Kompetensi Keahlian (Jurusan) <span class="text-danger">*</span></label>
+                        <select class="form-select border-success fw-bold" id="ppdbJurusan" required>
+                            <option value="">- Pilih Jurusan Tujuan -</option>
+                            <option value="TKJ">Teknik Komputer dan Jaringan (TKJ)</option>
+                            <option value="AK">Akuntansi dan Keuangan Lembaga (AK)</option>
+                            <option value="PM">Pemasaran / Bisnis Digital (PM)</option>
+                            <option value="DKV">Desain Komunikasi Visual (DKV)</option>
+                            <option value="ML">Manajemen Logistik (ML)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6"><label class="form-label">Agama <span class="text-danger">*</span></label>
+                        <select class="form-select" id="ppdbAgama" required>
+                            <option value="">- Pilih -</option><option value="Islam">Islam</option><option value="Kristen">Kristen</option><option value="Katolik">Katolik</option><option value="Hindu">Hindu</option><option value="Buddha">Buddha</option><option value="Konghucu">Konghucu</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6"><label class="form-label">NISN (Nomor Induk Siswa Nasional) <span class="text-danger">*</span></label><input type="number" class="form-control" id="ppdbNisn" required></div>
+                    <div class="col-md-6"><label class="form-label">NIK Siswa (Nomor KTP/KK) <span class="text-danger">*</span></label><input type="number" class="form-control" id="ppdbNik" required></div>
+                    <div class="col-md-6"><label class="form-label">Tempat Lahir <span class="text-danger">*</span></label><input type="text" class="form-control" id="ppdbTempatLahir" required></div>
+                    <div class="col-md-6"><label class="form-label">Tanggal Lahir <span class="text-danger">*</span></label><input type="date" class="form-control" id="ppdbTglLahir" required></div>
+                    <div class="col-md-6"><label class="form-label">Kewarganegaraan</label>
+                        <select class="form-select" id="ppdbWn">
+                            <option value="WNI (Indonesia)">WNI (Indonesia)</option><option value="WNA (Asing)">WNA (Asing)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3"><label class="form-label">Anak ke-</label><input type="number" class="form-control" id="ppdbAnakKe"></div>
+                    <div class="col-md-3"><label class="form-label">Jumlah Saudara</label><input type="number" class="form-control" id="ppdbJmlSdr"></div>
+                    <div class="col-md-6"><label class="form-label">Hobi</label><input type="text" class="form-control" id="ppdbHobi"></div>
+                    <div class="col-md-6"><label class="form-label">Cita-cita</label><input type="text" class="form-control" id="ppdbCita"></div>
+                </div>
+            </div>
+
+            <!-- B. TEMPAT TINGGAL -->
+            <div class="form-section">
+                <div class="section-title"><i class="fa-solid fa-map-location-dot me-2"></i>B. Keterangan Tempat Tinggal</div>
+                <div class="row g-3">
+                    <div class="col-12"><label class="form-label">Alamat Lengkap (Jalan, RT/RW, Kel, Kec) <span class="text-danger">*</span></label><textarea class="form-control" id="ppdbAlamat" rows="2" required></textarea></div>
+                    <div class="col-md-6"><label class="form-label">No. HP Siswa / WA <span class="text-danger">*</span></label><input type="number" class="form-control" id="ppdbHp" required></div>
+                    <div class="col-md-6"><label class="form-label">Email (Aktif) <span class="text-danger">*</span></label><input type="email" class="form-control" id="ppdbEmail" required></div>
+                    <div class="col-md-6"><label class="form-label">Jarak ke Sekolah (Km)</label><input type="number" class="form-control" id="ppdbJarak" placeholder="Contoh: 2"></div>
+                    <div class="col-md-6"><label class="form-label">Tinggal Bersama</label>
+                        <select class="form-select" id="ppdbTinggal">
+                            <option value="Orang Tua">Orang Tua</option><option value="Wali">Wali</option><option value="Asrama/Kos">Asrama/Kos</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- C. KESEHATAN -->
+            <div class="form-section">
+                <div class="section-title"><i class="fa-solid fa-heart-pulse me-2"></i>C. Keterangan Kesehatan</div>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Golongan Darah</label>
+                        <select class="form-select" id="ppdbDarah">
+                            <option value="-">- Belum Tahu -</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4"><label class="form-label">Tinggi Badan (cm)</label><input type="number" class="form-control" id="ppdbTb"></div>
+                    <div class="col-md-4"><label class="form-label">Berat Badan (kg)</label><input type="number" class="form-control" id="ppdbBb"></div>
+                    <div class="col-12"><label class="form-label">Penyakit Berat yang Pernah Diderita</label><input type="text" class="form-control" id="ppdbPenyakit" placeholder="Kosongkan jika tidak ada"></div>
+                </div>
+            </div>
+
+            <!-- D. SEKOLAH ASAL -->
+            <div class="form-section">
+                <div class="section-title"><i class="fa-solid fa-school me-2"></i>D. Sekolah Asal</div>
+                <div class="row g-3">
+                    <div class="col-md-8"><label class="form-label">Nama Sekolah Asal (SMP/MTs) <span class="text-danger">*</span></label><input type="text" class="form-control" id="ppdbAsalSekolah" required></div>
+                    <div class="col-md-4"><label class="form-label">Tahun Lulus <span class="text-danger">*</span></label><input type="number" class="form-control" id="ppdbThnLulus" required></div>
+                    <div class="col-md-6"><label class="form-label">NPSN Sekolah Asal</label><input type="number" class="form-control" id="ppdbNpsn"></div>
+                    <div class="col-md-6"><label class="form-label">No. Peserta Ujian</label><input type="text" class="form-control" id="ppdbNoUjian"></div>
+                    <div class="col-12"><label class="form-label">Alamat Sekolah Asal</label><input type="text" class="form-control" id="ppdbAlamatSekolah"></div>
+                    <div class="col-12"><label class="form-label">No. Ijazah (Jika sudah ada)</label><input type="text" class="form-control" id="ppdbIjazah"></div>
+                </div>
+            </div>
+
+            <!-- E. DATA ORTU -->
+            <div class="form-section">
+                <div class="section-title"><i class="fa-solid fa-children me-2"></i>E. Data Orang Tua / Wali</div>
+                
+                <h6 class="fw-bold mt-2 border-bottom pb-2">Data Ayah</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6"><label class="form-label">Nama Lengkap Ayah</label><input type="text" class="form-control" id="ppdbNamaAyah"></div>
+                    <div class="col-md-6"><label class="form-label">No. HP / WA Ayah</label><input type="number" class="form-control" id="ppdbHpAyah"></div>
+                    <div class="col-md-6"><label class="form-label">Pendidikan Terakhir Ayah</label><input type="text" class="form-control" id="ppdbPddkAyah"></div>
+                    <div class="col-md-6"><label class="form-label">Pekerjaan Ayah</label><input type="text" class="form-control" id="ppdbPekerjaanAyah"></div>
+                </div>
+
+                <h6 class="fw-bold border-bottom pb-2">Data Ibu</h6>
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label">Nama Lengkap Ibu</label><input type="text" class="form-control" id="ppdbNamaIbu"></div>
+                    <div class="col-md-6"><label class="form-label">No. HP / WA Ibu</label><input type="number" class="form-control" id="ppdbHpIbu"></div>
+                    <div class="col-md-6"><label class="form-label">Pendidikan Terakhir Ibu</label><input type="text" class="form-control" id="ppdbPddkIbu"></div>
+                    <div class="col-md-6"><label class="form-label">Pekerjaan Ibu</label><input type="text" class="form-control" id="ppdbPekerjaanIbu"></div>
+                </div>
+            </div>
+
+            <!-- F. FOTO -->
+            <div class="form-section">
+                <div class="section-title"><i class="fa-solid fa-camera me-2"></i>F. Upload Pas Foto</div>
+                <div class="mb-3">
+                    <label class="form-label">Pas Foto 3x4 (Wajib) <span class="text-danger">*</span></label>
+                    <input type="file" class="form-control" id="ppdbFoto" accept="image/png, image/jpeg" required>
+                    <div class="form-text">Format: JPG/PNG. Ukuran Maksimal 2MB.</div>
+                </div>
+            </div>
+
+            <!-- G. PERNYATAAN -->
+            <div class="form-section bg-light border border-warning">
+                <div class="section-title text-warning text-dark"><i class="fa-solid fa-file-signature me-2"></i>G. Surat Pernyataan</div>
+                <p class="small fw-semibold text-muted">Dengan ini saya menyatakan bahwa:</p>
+                <ol class="small fw-semibold text-muted">
+                    <li>Memilih SMK Ad-Da’wah atas kehendak sendiri.</li>
+                    <li>Bersedia mematuhi semua peraturan sekolah yang berlaku.</li>
+                    <li>Bersedia mengikuti pendidikan Agama Islam termasuk sholat berjamaah dan ujian.</li>
+                    <li>Bersedia membayar kewajiban keuangan (PPDB, SPP, dll) yang ditentukan sekolah.</li>
+                    <li>Data yang saya isi di atas adalah BENAR. Apabila palsu, saya siap menerima sanksi/pembatalan.</li>
+                </ol>
+                <div class="form-check mt-3">
+                    <input class="form-check-input border-success" type="checkbox" id="ppdbSetuju" required style="transform: scale(1.3); margin-top: 5px;">
+                    <label class="form-check-label fw-bold text-success ms-2" for="ppdbSetuju">
+                        SAYA MENYETUJUI PERNYATAAN DI ATAS
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow" id="btnSubmitPPDB">
+                <i class="fa-solid fa-paper-plane me-2"></i> KIRIM FORMULIR PENDAFTARAN
+            </button>
+        </form>
+    </div>
+
+    <!-- Modal Bukti Daftar -->
+    <div class="modal fade" id="modalBuktiPPDB" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg text-center p-4">
+                <div class="modal-body">
+                    <i class="fa-solid fa-circle-check text-success mb-3" style="font-size: 4rem;"></i>
+                    <h4 class="fw-bold text-dark mb-1">PENDAFTARAN BERHASIL!</h4>
+                    <p class="text-muted small mb-4">Terima kasih telah mendaftar di SMK Ad-Da'wah Jakarta.</p>
+                    
+                    <div class="bg-light border rounded-3 p-3 mb-4">
+                        <small class="text-muted fw-bold d-block mb-1">NOMOR PENDAFTARAN ANDA:</small>
+                        <h2 class="text-success fw-bolder mb-0" id="txtNomorPendaftaran">PPDB-0000</h2>
+                    </div>
+
+                    <p class="small fw-semibold text-danger">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i> Simpan / Screenshot nomor ini untuk keperluan daftar ulang.
+                    </p>
+                    <button type="button" class="btn btn-success w-100 fw-bold rounded-pill mt-2" onclick="window.location.href='index.html'">Kembali ke Beranda</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Bukti Daftar -->
+    <div class="modal fade" id="modalBuktiPPDB" tabindex="-1" data-bs-backdrop="static">
+        <!-- ... isi modal ... -->
+    </div>
+
+    <!-- 1. Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 2. 🟢 TAMBAHKAN BARIS INI: Library Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- 3. Skrip Logika PPDB (Wajib ditaruh paling bawah setelah Supabase) -->
+    <script src="ppdb.js"></script>
+</body>
+</html>

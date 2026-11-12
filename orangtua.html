@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Keuangan Orang Tua & Siswa - SMK Ad-Da'Wah</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { background-color: #f2f8f5; font-family: 'Segoe UI', sans-serif; }
+        .header-ortu { background: linear-gradient(135deg, #198754 0%, #20c997 100%); color: white; padding: 30px 20px; border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; }
+        .card-ortu { border: none; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
+    </style>
+</head>
+<body>
+
+    <div class="header-ortu shadow-sm mb-4">
+        <div class="container d-flex justify-content-between align-items-center" style="max-width: 900px;">
+            <div class="d-flex align-items-center gap-3">
+                <img src="https://i.ibb.co.com/Ngh0x6Rr/Addawah-300x.png" style="width: 52px; height: auto;" alt="Logo">
+                <div>
+                    <h4 class="fw-bold mb-0">PORTAL KEUANGAN SISWA & ORANG TUA</h4>
+                    <small class="text-white-50" id="infoAnakOrtu">Memuat data siswa...</small>
+                </div>
+            </div>
+            <button class="btn btn-light btn-sm fw-bold rounded-pill text-danger px-3" onclick="keluarOrtu()">
+                <i class="fa-solid fa-right-from-bracket me-1"></i> Keluar
+            </button>
+        </div>
+    </div>
+
+    <div class="container pb-5" style="max-width: 900px;">
+        <!-- Ringkasan Tagihan -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card card-ortu p-3 border-start border-primary border-4">
+                    <small class="text-muted fw-bold">Total Tagihan</small>
+                    <h4 class="fw-bold text-dark mb-0" id="ortuTotalTagihan">Rp 0</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-ortu p-3 border-start border-success border-4">
+                    <small class="text-muted fw-bold">Sudah Dibayar</small>
+                    <h4 class="fw-bold text-success mb-0" id="ortuSudahBayar">Rp 0</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-ortu p-3 border-start border-danger border-4">
+                    <small class="text-muted fw-bold">Sisa Tagihan / Tunggakan</small>
+                    <h4 class="fw-bold text-danger mb-0" id="ortuSisaTagihan">Rp 0</h4>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daftar Tagihan & Pembayaran Mandiri dari Rumah -->
+        <div class="card card-ortu p-4 mb-4">
+            <h5 class="fw-bold text-success mb-3"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Rincian Tagihan & Bayar dari Rumah (QRIS)</h5>
+            <div class="alert alert-success small py-2">
+                Centang item yang ingin dibayar. Anda dapat mengubah kolom <b>"Nominal Dibayar"</b> jika ingin mencicil, lalu scan QRIS dan unggah foto bukti pembayaran.
+            </div>
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered align-middle small">
+                    <thead class="table-light text-center">
+                        <tr>
+                            <th>Pilih</th>
+                            <th class="text-start">Item Pembayaran</th>
+                            <th>Tagihan</th>
+                            <th>Dibayar</th>
+                            <th>Sisa</th>
+                            <th style="width:160px;">Nominal Dibayar (Rp)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbTagihanOrtu"></tbody>
+                </table>
+            </div>
+
+            <div class="row g-4 align-items-center bg-light p-3 rounded-4 border">
+                <div class="col-md-6 text-center">
+                    <span class="badge bg-success mb-2">SCAN QRIS DINAMIS SMK AD-DA'WAH</span>
+                    <h4 class="fw-bold text-danger mb-2" id="ortuNominalQris">Rp 0</h4>
+                    <div id="wadahQrisOrtu" class="d-flex justify-content-center bg-white p-3 rounded-3 shadow-sm mx-auto" style="width: fit-content;"></div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="fw-bold text-dark"><i class="fa-solid fa-upload text-success me-2"></i>Konfirmasi & Upload Bukti Pembayaran</h6>
+                    <p class="small text-muted">Setelah melakukan pembayaran QRIS di atas, unggah tangkapan layar (screenshot) bukti pembayaran Anda agar segera diverifikasi Bendahara.</p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Upload Screenshot Bukti Bayar <span class="text-danger">*</span></label>
+                        <input type="file" id="fileBuktiOrtu" class="form-control" accept="image/*" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Catatan (Opsional)</label>
+                        <input type="text" id="ketBuktiOrtu" class="form-control" placeholder="Contoh: Bayar SPP & Cicilan PPDB">
+                    </div>
+                    <button class="btn btn-success w-100 fw-bold py-2 shadow-sm" id="btnKirimBuktiOrtu" onclick="kirimPembayaranMandiriOrtu()">
+                        <i class="fa-solid fa-paper-plane me-2"></i> Kirim Bukti Pembayaran ke Bendahara
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Riwayat Pembayaran -->
+        <div class="card card-ortu p-4">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left text-success me-2"></i>Riwayat Pembayaran Siswa</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle text-center small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>No. Transaksi</th>
+                            <th>Tanggal</th>
+                            <th>Nominal</th>
+                            <th>Metode & Sumber</th>
+                            <th>Status Verifikasi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbRiwayatOrtu"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const supabaseUrl = 'https://rniggtkxtlblpvxaycrl.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuaWdndGt4dGxibHB2eGF5Y3JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTYzNDcsImV4cCI6MjA5OTY5MjM0N30.vo-FGuq_QL5R9WI21jA535txSp1uZDAxzirSEk6eP44';
+        const sb = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        let sesiUser = null;
+        let invoiceAktif = null;
+        let staticQrisSekolah = "00020101021126610014COM.GO-JEK.WWW01189360091437682693650210G7682693650303UMI51440014ID.CO.QRIS.WWW0215ID10266356616340303UMI5204829953033605802ID5911SMK Addawah6013JAKARTA BARAT61051175062070703A0163046227";
+
+        function rupiah(n) { return "Rp " + Number(n || 0).toLocaleString('id-ID'); }
+
+        function crc16ccitt(str) {
+            let crc = 0xFFFF;
+            for (let c = 0; c < str.length; c++) {
+                crc ^= str.charCodeAt(c) << 8;
+                for (let i = 0; i < 8; i++) {
+                    crc = (crc & 0x8000) !== 0 ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF;
+                }
+            }
+            return crc.toString(16).toUpperCase().padStart(4, '0');
+        }
+
+        function generateDynamicQris(staticQris, amount) {
+            let base = staticQris.trim().slice(0, -4).replace('010211', '010212').replace(/54\d{2}\d+(?=5802ID)/, '');
+            const amtStr = Math.round(Number(amount)).toString();
+            const tag54 = '54' + amtStr.length.toString().padStart(2, '0') + amtStr;
+            const idx = base.indexOf('5802ID');
+            if (idx === -1) return staticQris;
+            const payload = base.slice(0, idx) + tag54 + base.slice(idx);
+            return payload + crc16ccitt(payload);
+        }
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            const raw = localStorage.getItem("sesi_addawah");
+            if (!raw) { window.location.href = "index.html"; return; }
+            sesiUser = JSON.parse(raw);
+            document.getElementById("infoAnakOrtu").innerText = `Siswa: ${sesiUser.nama_lengkap || sesiUser.nama} | NIK/ID: ${sesiUser.username} | Kelas: ${sesiUser.kelas || '-'}`;
+
+            const { data: set } = await sb.from('payment_settings').select('static_qris').eq('id', 1).maybeSingle();
+            if (set && set.static_qris) staticQrisSekolah = set.static_qris;
+
+            await muatDataKeuanganAnak();
+        });
+
+        function keluarOrtu() {
+            localStorage.removeItem("sesi_addawah");
+            window.location.href = "index.html";
+        }
+
+        async function muatDataKeuanganAnak() {
+            const { data: inv } = await sb.from('student_invoices').select('*').eq('username_siswa', sesiUser.username).order('created_at', { ascending: false }).limit(1).maybeSingle();
+            invoiceAktif = inv;
+
+            if (!inv) {
+                document.getElementById("tbTagihanOrtu").innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">Belum ada tagihan tercatat untuk siswa ini.</td></tr>';
+                return;
+            }
+
+            document.getElementById("ortuTotalTagihan").innerText = rupiah(inv.total_tagihan);
+            document.getElementById("ortuSudahBayar").innerText = rupiah(inv.total_dibayar);
+            document.getElementById("ortuSisaTagihan").innerText = rupiah(inv.sisa_tagihan);
+
+            const { data: details } = await sb.from('invoice_details').select('*').eq('invoice_id', inv.id);
+            document.getElementById("tbTagihanOrtu").innerHTML = (details || []).map(d => {
+                const lunas = d.sisa_item <= 0;
+                return `<tr class="${lunas ? 'table-success' : ''}">
+                    <td class="text-center"><input type="checkbox" class="form-check-input cb-ortu" data-id="${d.id}" data-nama="${d.nama_item}" data-kategori="${d.kategori}" data-sisa="${d.sisa_item}" ${lunas ? 'disabled' : 'checked'} onchange="hitungQrisOrtu()"></td>
+                    <td><b>${d.nama_item}</b><br><small class="text-muted">${d.kategori}</small></td>
+                    <td class="text-end">${rupiah(d.nominal_tagihan)}</td>
+                    <td class="text-end text-success">${rupiah(d.jumlah_dibayar)}</td>
+                    <td class="text-end fw-bold text-danger">${rupiah(d.sisa_item)}</td>
+                    <td><input type="number" class="form-control form-control-sm text-end fw-bold" id="inpOrtu_${d.id}" value="${lunas ? 0 : d.sisa_item}" max="${d.sisa_item}" min="0" ${lunas ? 'disabled' : ''} oninput="hitungQrisOrtu()"></td>
+                </tr>`;
+            }).join('');
+
+            hitungQrisOrtu();
+
+            const { data: trxs } = await sb.from('payment_transactions').select('*').eq('username_siswa', sesiUser.username).order('tanggal_transaksi', { ascending: false });
+            document.getElementById("tbRiwayatOrtu").innerHTML = (trxs || []).map(t => `
+                <tr>
+                    <td class="fw-bold">${t.no_transaksi}</td>
+                    <td>${new Date(t.tanggal_transaksi).toLocaleString('id-ID')}</td>
+                    <td class="fw-bold text-success">${rupiah(t.total_bayar)}</td>
+                    <td>${t.metode_pembayaran} (${t.sumber_pembayaran || 'Kasir'})</td>
+                    <td><span class="badge ${t.status_transaksi === 'Berhasil' ? 'bg-success' : 'bg-warning text-dark'}">${t.status_transaksi === 'Berhasil' ? '✅ Lunas / Disahkan' : '⏳ Menunggu Verifikasi Bendahara'}</span></td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="text-muted py-3">Belum ada riwayat transaksi.</td></tr>';
+        }
+
+        function hitungQrisOrtu() {
+            let total = 0;
+            document.querySelectorAll('.cb-ortu:checked').forEach(cb => {
+                const id = cb.getAttribute('data-id');
+                const max = Number(cb.getAttribute('data-sisa'));
+                const inp = document.getElementById(`inpOrtu_${id}`);
+                let val = Math.min(max, Math.max(0, Number(inp.value || 0)));
+                inp.value = val;
+                total += val;
+            });
+
+            document.getElementById("ortuNominalQris").innerText = rupiah(total);
+            document.getElementById("ortuNominalQris").setAttribute('data-total', total);
+            const wadah = document.getElementById("wadahQrisOrtu");
+            wadah.innerHTML = "";
+            if (total > 0) {
+                const qrisStr = generateDynamicQris(staticQrisSekolah, total);
+                new QRCode(wadah, { text: qrisStr, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L });
+            }
+        }
+
+        async function kirimPembayaranMandiriOrtu() {
+            if (!invoiceAktif) return alert("Tagihan tidak ditemukan!");
+            const total = Number(document.getElementById("ortuNominalQris").getAttribute('data-total') || 0);
+            if (total <= 0) return alert("Pilih minimal 1 item pembayaran!");
+
+            const fileInput = document.getElementById("fileBuktiOrtu");
+            if (!fileInput.files || !fileInput.files[0]) return alert("Wajib mengunggah foto/screenshot bukti pembayaran QRIS!");
+
+            const btn = document.getElementById("btnKirimBuktiOrtu");
+            btn.disabled = true;
+            btn.innerText = "Mengunggah Bukti Pembayaran...";
+
+            try {
+                const file = fileInput.files[0];
+                const ext = file.name.split('.').pop();
+                const fileName = `bukti_ortu_${sesiUser.username}_${Date.now()}.${ext}`;
+                const { error: upErr } = await sb.storage.from('tempat-naro-foto').upload(fileName, file);
+                if (upErr) throw upErr;
+
+                const { data: pubUrl } = sb.storage.from('tempat-naro-foto').getPublicUrl(fileName);
+                const noTrx = `TRX-ORTU-${Math.floor(100000 + Math.random() * 900000)}`;
+
+                const { data: trx, error: trxErr } = await sb.from('payment_transactions').insert([{
+                    no_transaksi: noTrx,
+                    invoice_id: invoiceAktif.id,
+                    username_siswa: sesiUser.username,
+                    nisn: invoiceAktif.nisn,
+                    nama_siswa: invoiceAktif.nama_siswa,
+                    kelas: invoiceAktif.kelas,
+                    jurusan: invoiceAktif.jurusan,
+                    tahun_ajaran: invoiceAktif.tahun_ajaran,
+                    total_bayar: total,
+                    uang_diterima: total,
+                    kembalian: 0,
+                    metode_pembayaran: 'QRIS',
+                    status_transaksi: 'Pending',
+                    petugas: 'Menunggu Bendahara',
+                    sumber_pembayaran: 'Mandiri (Orang Tua/Siswa)',
+                    bukti_bayar_url: pubUrl.publicUrl,
+                    keterangan: document.getElementById("ketBuktiOrtu").value.trim() || 'Pembayaran QRIS dari Rumah'
+                }]).select().single();
+
+                if (trxErr) throw trxErr;
+
+                const rincian = [];
+                document.querySelectorAll('.cb-ortu:checked').forEach(cb => {
+                    const id = cb.getAttribute('data-id');
+                    const nom = Number(document.getElementById(`inpOrtu_${id}`).value || 0);
+                    if (nom > 0) {
+                        rincian.push({
+                            transaction_id: trx.id,
+                            invoice_detail_id: id,
+                            nama_item: cb.getAttribute('data-nama'),
+                            kategori: cb.getAttribute('data-kategori'),
+                            nominal_dibayar: nom
+                        });
+                    }
+                });
+                await sb.from('payment_transaction_details').insert(rincian);
+
+                alert("Bukti pembayaran berhasil dikirim! Status pembayaran akan berubah menjadi LUNAS setelah diverifikasi oleh Bendahara Sekolah.");
+                fileInput.value = "";
+                await muatDataKeuanganAnak();
+            } catch (e) {
+                alert("Gagal mengirim bukti: " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Kirim Bukti Pembayaran ke Bendahara";
+            }
+        }
+    </script>
+</body>
+</html>
