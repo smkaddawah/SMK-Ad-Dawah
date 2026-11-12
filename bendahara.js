@@ -289,7 +289,7 @@ async function muatKelasDanJurusanDariUsers() {
 
     try {
         // 1. Tarik seluruh siswa dari tabel public.users
-        const allUsers = await apiRequest('GET', 'users?select=username,nama_lengkap,role,kelas,no_hp,nama_ayah,nama_ibu,foto_profil&order=nama_lengkap.asc');
+        const allUsers = await apiRequest('GET', 'users?select=username,nama_lengkap,role,kelas,no_hp,nama_ayah,no_hp_ayah,nama_ibu,no_hp_ibu,foto_profil&order=nama_lengkap.asc');
         if (Array.isArray(allUsers)) {
             daftarSiswaUsers = allUsers.filter(u => u.role && u.role.toLowerCase() === 'siswa');
             daftarSiswaUsers.forEach(u => {
@@ -2444,11 +2444,41 @@ function kumpulkanDataTunggakanPerSiswa() {
         const isLewat = tglTempo && tglTempo < todayStr;
 
         if (!grupSiswa.has(keySiswa)) {
+            // Cari data kontak dari tabel public.users (atau fallback dari ppdb_siswa)
+            const userDb = daftarSiswaUsers.find(u => String(u.username).trim().toLowerCase() === keySiswa) || {};
+            const ppdbDb = daftarSiswaPPDB.find(p => String(p.nik || p.nisn).trim().toLowerCase() === keySiswa) || {};
+
+            const hpIbu = (userDb.no_hp_ibu || ppdbDb.no_hp_ibu || '').trim();
+            const hpAyah = (userDb.no_hp_ayah || ppdbDb.no_hp_ayah || '').trim();
+            const hpSiswa = (userDb.no_hp || ppdbDb.no_hp || inv.no_hp || '').trim();
+
+            // Prioritas Nomor: 1. Ibu -> 2. Ayah -> 3. Siswa
+            let nomorTujuan = '';
+            let labelPenerima = '';
+            let namaOrtu = '';
+
+            if (hpIbu && hpIbu !== '-' && hpIbu.length >= 8) {
+                nomorTujuan = hpIbu;
+                labelPenerima = 'Ibu';
+                namaOrtu = userDb.nama_ibu || ppdbDb.nama_ibu || 'Ibu Wali Murid';
+            } else if (hpAyah && hpAyah !== '-' && hpAyah.length >= 8) {
+                nomorTujuan = hpAyah;
+                labelPenerima = 'Bapak';
+                namaOrtu = userDb.nama_ayah || ppdbDb.nama_ayah || 'Bapak Wali Murid';
+            } else if (hpSiswa && hpSiswa !== '-' && hpSiswa.length >= 8) {
+                nomorTujuan = hpSiswa;
+                labelPenerima = 'Siswa/Wali';
+                namaOrtu = userDb.nama_ibu || userDb.nama_ayah || inv.nama_wali || 'Orang Tua / Wali';
+            }
+
             grupSiswa.set(keySiswa, {
                 invoice_id: inv.id,
                 username_siswa: inv.username_siswa,
                 nama_siswa: inv.nama_siswa,
                 kelas: inv.kelas,
+                no_hp_tujuan: nomorTujuan,
+                label_kontak: labelPenerima,
+                nama_ortu: namaOrtu,
                 items: [],
                 total_tagihan_gabungan: 0,
                 total_dibayar_gabungan: 0,
@@ -2536,12 +2566,332 @@ window.renderTabelTunggakan = function() {
             <td class="fw-bolder text-danger fs-6 bg-danger bg-opacity-10">${formatRupiah(g.total_sisa_gabungan)}</td>
             <td>${bdgStatus}</td>
             <td>
-                <button class="btn btn-sm btn-success fw-bold" onclick="bukaKasirUntukSiswa('${g.invoice_id}')">
-                    <i class="fa-solid fa-cash-register me-1"></i> Bayar
-                </button>
+                <div class="d-flex gap-1 justify-content-center">
+                    <button class="btn btn-sm btn-success fw-bold" onclick="bukaKasirUntukSiswa('${g.invoice_id}')" title="Proses Bayar di Kasir">
+                        <i class="fa-solid fa-cash-register"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-success fw-bold" onclick="kirimWaTunggakanSiswa('${g.username_siswa.replace(/'/g, "\\'")}')" title="Kirim Rincian Tagihan ke WhatsApp">
+                        <i class="fa-brands fa-whatsapp"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger fw-bold" onclick="cetakSuratTagihanSiswaPDF('${g.username_siswa.replace(/'/g, "\\'")}')" title="Download Surat Tagihan Siswa (PDF)">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </button>
+                </div>
             </td>
         </tr>`;
     }).join('');
+};
+
+// =========================================================================
+// GENERATOR PDF VEKTOR (REKAP PER KELAS & SURAT TAGIHAN) + PENGIRIM WHATSAPP
+// =========================================================================
+
+// Helper pembuat instance jsPDF Vektor Murni (Teks tajam & otomatis pindah halaman)
+function buatDokumenJsPDF(orientasi = 'landscape') {
+    const JsPDFClass = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : window.jsPDF;
+    if (!JsPDFClass) return null;
+    return new JsPDFClass({ orientation: orientasi, unit: 'mm', format: 'a4' });
+}
+
+// 1. Fungsi Download PDF Vektor Rekap Tunggakan Per Kelas (1 Nama = 1 Baris Gabungan)
+window.downloadPDFRekapTunggakanKelas = async function() {
+    const listGrup = kumpulkanDataTunggakanPerSiswa();
+    if (listGrup.length === 0) {
+        await uiAlert("Data Kosong", "Tidak ada data tunggakan siswa pada kelas/filter yang dipilih.", "warning");
+        return;
+    }
+
+    const kelasTerpilih = document.getElementById("filterKelasTunggakan")?.value || "Semua Kelas";
+    const thnAjaran = document.getElementById("globalFilterTahun")?.value || "2026/2027";
+    const tglCetak = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    const namaPetugas = currentBendahara ? (currentBendahara.nama_lengkap || currentBendahara.username) : 'Bendahara Sekolah';
+    const namaFile = `Rekap_Tunggakan_${kelasTerpilih.replace(/\s+/g, '_')}_${thnAjaran.replace('/', '-')}.pdf`;
+
+    showLoadingUI(true, "Membuat PDF Rekap Tunggakan...", `Menyusun laporan kelas ${kelasTerpilih}...`);
+
+    try {
+        const doc = buatDokumenJsPDF('landscape');
+
+        // Jika jsPDF Vektor tersedia, gambar tabel secara vektor murni (Anti Pecah & Otomatis Multi-Halaman)
+        if (doc) {
+            let y = 15;
+            const pageWidth = 297;
+            const marginX = 12;
+
+            // Header Kop Sekolah
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.setTextColor(15, 81, 50);
+            doc.text(paymentSettings.school_name || "SMK AD-DA'WAH JAKARTA", marginX, y);
+
+            doc.setFontSize(11);
+            doc.setTextColor(30, 41, 59);
+            doc.text(`REKAPITULASI TUNGGAKAN SISWA PER KELAS (${kelasTerpilih.toUpperCase()})`, marginX, y + 6);
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            doc.text(`Tahun Ajaran: ${thnAjaran}   |   Tanggal Cetak: ${tglCetak}   |   Total Siswa Menunggak: ${listGrup.length} Siswa`, marginX, y + 11);
+
+            doc.setDrawColor(15, 81, 50);
+            doc.setLineWidth(0.6);
+            doc.line(marginX, y + 14, pageWidth - marginX, y + 14);
+            y += 20;
+
+            // Konfigurasi Lebar Kolom (Total = 273mm)
+            const colX = [12, 22, 72, 95, 195, 223, 251];
+            const colW = [10, 50, 23, 100, 28, 28, 34];
+
+            const gambarHeaderTabel = (posY) => {
+                doc.setFillColor(15, 81, 50);
+                doc.rect(marginX, posY, 273, 8, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(255, 255, 255);
+                doc.text("No", colX[0] + 2, posY + 5.5);
+                doc.text("Nama Siswa & ID", colX[1] + 2, posY + 5.5);
+                doc.text("Kelas", colX[2] + 2, posY + 5.5);
+                doc.text("Rincian Item Belum Lunas (Tagihan | Dibayar | Sisa)", colX[3] + 2, posY + 5.5);
+                doc.text("Total Tagihan", colX[4] + 2, posY + 5.5);
+                doc.text("Sudah Dibayar", colX[5] + 2, posY + 5.5);
+                doc.text("Sisa Gabungan", colX[6] + 2, posY + 5.5);
+                return posY + 8;
+            };
+
+            y = gambarHeaderTabel(y);
+
+            let grandTagihan = 0;
+            let grandDibayar = 0;
+            let grandSisa = 0;
+
+            listGrup.forEach((g, idx) => {
+                grandTagihan += g.total_tagihan_gabungan;
+                grandDibayar += g.total_dibayar_gabungan;
+                grandSisa += g.total_sisa_gabungan;
+
+                const barisItemTeks = g.items.map((it, i) =>
+                    `${i + 1}. ${it.nama_item}: Tagihan ${formatRupiah(it.nominal_tagihan)} | Dibayar ${formatRupiah(it.jumlah_dibayar)} | Sisa ${formatRupiah(it.sisa_item)}`
+                );
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                const splitRincian = doc.splitTextToSize(barisItemTeks.join("\n"), colW[3] - 4);
+                const splitNama = doc.splitTextToSize(`${g.nama_siswa}\n(ID: ${g.username_siswa})`, colW[1] - 4);
+
+                const tinggiBaris = Math.max(splitRincian.length * 4.2, splitNama.length * 4.2, 8) + 3;
+
+                // Cek pindah halaman otomatis jika ruang tidak cukup
+                if (y + tinggiBaris > 185) {
+                    doc.addPage();
+                    y = 15;
+                    y = gambarHeaderTabel(y);
+                }
+
+                // Latar belang (Zebra striping)
+                if (idx % 2 === 1) {
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(marginX, y, 273, tinggiBaris, 'F');
+                }
+
+                // Garis kotak per kolom
+                doc.setDrawColor(203, 213, 225);
+                doc.setLineWidth(0.2);
+                colX.forEach((x, i) => doc.rect(x, y, colW[i], tinggiBaris));
+
+                doc.setTextColor(15, 23, 42);
+                doc.setFont("helvetica", "bold");
+                doc.text(String(idx + 1), colX[0] + 3, y + 5);
+                doc.text(splitNama, colX[1] + 2, y + 4.5);
+                doc.text(String(g.kelas), colX[2] + 2, y + 5);
+
+                doc.setFont("helvetica", "normal");
+                doc.text(splitRincian, colX[3] + 2, y + 4.5);
+
+                doc.text(formatRupiah(g.total_tagihan_gabungan), colX[4] + 2, y + 5);
+                doc.setTextColor(21, 128, 61);
+                doc.text(formatRupiah(g.total_dibayar_gabungan), colX[5] + 2, y + 5);
+
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(220, 38, 38);
+                doc.text(formatRupiah(g.total_sisa_gabungan), colX[6] + 2, y + 5);
+
+                y += tinggiBaris;
+            });
+
+            // Baris Grand Total
+            if (y + 25 > 195) {
+                doc.addPage();
+                y = 20;
+            }
+            doc.setFillColor(241, 245, 249);
+            doc.rect(marginX, y, 273, 8, 'FD');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(15, 23, 42);
+            doc.text(`GRAND TOTAL TUNGGAKAN (${kelasTerpilih.toUpperCase()}) :`, colX[3] + 25, y + 5.5);
+            doc.text(formatRupiah(grandTagihan), colX[4] + 2, y + 5.5);
+            doc.setTextColor(21, 128, 61);
+            doc.text(formatRupiah(grandDibayar), colX[5] + 2, y + 5.5);
+            doc.setTextColor(220, 38, 38);
+            doc.text(formatRupiah(grandSisa), colX[6] + 2, y + 5.5);
+
+            // Tanda Tangan Bendahara
+            y += 14;
+            doc.setTextColor(15, 23, 42);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Jakarta, ${tglCetak}`, 235, y);
+            doc.text("Bendahara Sekolah,", 235, y + 5);
+            doc.setFont("helvetica", "bold");
+            doc.text(`(${namaPetugas})`, 235, y + 20);
+
+            doc.save(namaFile);
+        }
+
+        showLoadingUI(false);
+        showToast(`PDF Rekap Tunggakan (${kelasTerpilih}) berhasil diunduh!`);
+    } catch (err) {
+        showLoadingUI(false);
+        await uiAlert("Gagal Membuat PDF", err.message, "error");
+    }
+};
+
+// 2. Fungsi Download Surat Pemberitahuan Tagihan Individu (PDF Vektor A4 Portrait)
+window.cetakSuratTagihanSiswaPDF = async function(usernameSiswa) {
+    const listGrup = kumpulkanDataTunggakanPerSiswa();
+    const siswa = listGrup.find(g => String(g.username_siswa).toLowerCase() === String(usernameSiswa).toLowerCase());
+    if (!siswa) return;
+
+    const doc = buatDokumenJsPDF('portrait');
+    if (!doc) return;
+
+    const tglCetak = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    const namaPetugas = currentBendahara ? (currentBendahara.nama_lengkap || currentBendahara.username) : 'Bendahara Sekolah';
+
+    let y = 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(15, 81, 50);
+    doc.text(paymentSettings.school_name || "SMK AD-DA'WAH JAKARTA", 105, y, { align: "center" });
+
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.text("SURAT PEMBERITAHUAN RINCIAN TUNGGAKAN ADMINISTRASI SISWA", 105, y + 6, { align: "center" });
+    doc.setLineWidth(0.5);
+    doc.line(15, y + 10, 195, y + 10);
+
+    y += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Kepada Yth. Orang Tua / Wali dari:`, 15, y);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Nama Siswa : ${siswa.nama_siswa}`, 20, y + 6);
+    doc.text(`ID / NIK       : ${siswa.username_siswa}`, 20, y + 11);
+    doc.text(`Kelas           : ${siswa.kelas}`, 20, y + 16);
+
+    y += 24;
+    doc.setFont("helvetica", "normal");
+    doc.text("Berikut adalah rincian administrasi keuangan siswa yang tercatat belum lunas:", 15, y);
+
+    y += 5;
+    doc.setFillColor(15, 81, 50);
+    doc.rect(15, y, 180, 8, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text("No", 18, y + 5.5);
+    doc.text("Nama Item Pembayaran", 28, y + 5.5);
+    doc.text("Total Tagihan", 110, y + 5.5);
+    doc.text("Sudah Dibayar", 140, y + 5.5);
+    doc.text("Sisa Tunggakan", 168, y + 5.5);
+    y += 8;
+
+    siswa.items.forEach((it, idx) => {
+        doc.setDrawColor(203, 213, 225);
+        doc.rect(15, y, 180, 7.5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(15, 23, 42);
+        doc.text(String(idx + 1), 18, y + 5);
+        doc.text(`${it.nama_item} (${it.kategori})`, 28, y + 5);
+        doc.text(formatRupiah(it.nominal_tagihan), 110, y + 5);
+        doc.text(formatRupiah(it.jumlah_dibayar), 140, y + 5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(220, 38, 38);
+        doc.text(formatRupiah(it.sisa_item), 168, y + 5);
+        y += 7.5;
+    });
+
+    doc.setFillColor(254, 242, 242);
+    doc.rect(15, y, 180, 8.5, 'FD');
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("TOTAL GABUNGAN:", 28, y + 5.8);
+    doc.text(formatRupiah(siswa.total_tagihan_gabungan), 110, y + 5.8);
+    doc.setTextColor(21, 128, 61);
+    doc.text(formatRupiah(siswa.total_dibayar_gabungan), 140, y + 5.8);
+    doc.setTextColor(220, 38, 38);
+    doc.text(formatRupiah(siswa.total_sisa_gabungan), 168, y + 5.8);
+
+    y += 16;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+    doc.text("Pembayaran dapat dilakukan melalui Kasir Bendahara Sekolah atau melalui Portal Orang Tua (QRIS).", 15, y);
+
+    y += 14;
+    doc.text(`Jakarta, ${tglCetak}`, 140, y);
+    doc.text("Bendahara Sekolah,", 140, y + 5);
+    doc.setFont("helvetica", "bold");
+    doc.text(`(${namaPetugas})`, 140, y + 22);
+
+    doc.save(`Surat_Tagihan_${siswa.nama_siswa.replace(/\s+/g, '_')}.pdf`);
+    showToast(`Surat Tagihan PDF untuk ${siswa.nama_siswa} berhasil diunduh!`);
+};
+
+// 3. Fungsi Pengirim Draft WhatsApp Tagihan Otomatis ke Orang Tua / Siswa
+// 2. Fungsi Pengirim Draft WhatsApp Tagihan Otomatis (1-Click)
+window.kirimWaTunggakanSiswa = async function(usernameSiswa) {
+    const listGrup = kumpulkanDataTunggakanPerSiswa();
+    const g = listGrup.find(x => String(x.username_siswa).toLowerCase() === String(usernameSiswa).toLowerCase());
+    if (!g) return;
+
+    // Ambil nomor HP dari database (users atau invoices)
+    const usr = daftarSiswaUsers.find(u => String(u.username).toLowerCase() === String(usernameSiswa).toLowerCase());
+    const inv = allInvoices.find(i => String(i.username_siswa).toLowerCase() === String(usernameSiswa).toLowerCase());
+    let noHp = usr?.no_hp_ayah || usr?.no_hp_ibu || usr?.no_hp || inv?.no_hp || "";
+
+    // JIKA NOMOR KOSONG DI DATABASE, baru tampilkan popup untuk minta nomor
+    if (!noHp || noHp.trim() === "") {
+        noHp = await uiPrompt(
+            "Nomor WhatsApp Kosong",
+            `Sistem tidak menemukan nomor HP untuk siswa ${g.nama_siswa} di database.\nSilakan masukkan nomor tujuan secara manual:`,
+            "Contoh: 081234567890"
+        );
+        if (!noHp) return; // Batal jika user klik cancel
+    }
+
+    // Normalisasi Nomor HP ke format Internasional (mengubah 08... menjadi 628...)
+    let cleanHp = noHp.replace(/[^0-9]/g, '');
+    if (cleanHp.startsWith('0')) cleanHp = '62' + cleanHp.slice(1);
+
+    const rincianTeks = g.items.map((it, i) =>
+        `${i + 1}. *${it.nama_item}* (${it.kategori})\n   • Tagihan: ${formatRupiah(it.nominal_tagihan)} | Dibayar: ${formatRupiah(it.jumlah_dibayar)}\n   • *Sisa: ${formatRupiah(it.sisa_item)}*`
+    ).join('\n');
+
+    const pesanWA =
+        `Assalamu'alaikum Wr. Wb.\n` +
+        `Yth. Bapak/Ibu Orang Tua/Wali dari siswa:\n\n` +
+        `Nama : *${g.nama_siswa}*\n` +
+        `Kelas : *${g.kelas}*\n` +
+        `ID/NIK : ${g.username_siswa}\n\n` +
+        `Melalui pesan ini, kami dari Bendahara *${paymentSettings.school_name}* menginformasikan rincian tagihan administrasi yang belum lunas:\n\n` +
+        `${rincianTeks}\n\n` +
+        `*TOTAL SISA TUNGGAKAN: ${formatRupiah(g.total_sisa_gabungan)}*\n\n` +
+        `_Bapak/Ibu juga dapat melihat rincian resminya pada file PDF surat tagihan yang kami lampirkan di bawah ini._\n\n` +
+        `Pembayaran dapat dilakukan secara tunai di Kasir Sekolah atau dari rumah melalui Portal Orang Tua (menggunakan QRIS).\n\n` +
+        `Terima kasih atas perhatian dan kerja samanya.\n` +
+        `Wassalamu'alaikum Wr. Wb.`;
+
+    // Langsung buka tab WhatsApp dengan teks yang sudah di-generate
+    window.open(`https://wa.me/${cleanHp}?text=${encodeURIComponent(pesanWA)}`, '_blank');
 };
 
 // Fungsi Download PDF Rekap Tunggakan Per Kelas (Tanpa Duplikat Nama)
