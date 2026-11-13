@@ -1,0 +1,215 @@
+/* Design Variables */
+:root {
+  --primary-color: #059669; /* Hijau Emerald */
+  --primary-dark: #047857;
+  --bg-color: #f9fafb;
+  --surface-color: #ffffff;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --border-color: #e5e7eb;
+  
+  --space-2: 8px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  
+  --radius: 8px;
+}
+
+/* Reset & Base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+/* Header */
+.header {
+  background-color: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: var(--space-4) 0;
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.logo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.logo {
+  height: 64px;
+  width: auto;
+  object-fit: contain;
+}
+
+.header-titles h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 2px;
+  letter-spacing: -0.5px;
+}
+
+.header-titles p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.contact-quick {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary-dark);
+  background-color: #d1fae5;
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+/* Hero Section */
+.hero {
+  background-size: cover;
+  background-position: center;
+  padding: 60px 0;
+  text-align: center;
+  color: #ffffff;
+}
+
+.hero-content {
+  max-width: 700px;
+}
+
+.hero h2 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+.hero p {
+  font-size: 16px;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+/* Info Section (Alamat & Kontak) */
+.info-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+@media (max-width: 768px) {
+  .info-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.info-card {
+  background-color: var(--surface-color);
+  padding: var(--space-6);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+
+.info-card h3 {
+  font-size: 18px;
+  color: var(--primary-color);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.address-text {
+  color: var(--text-secondary);
+}
+
+.contact-list {
+  list-style: none;
+}
+
+.contact-list li {
+  margin-bottom: var(--space-4);
+  color: var(--text-secondary);
+}
+
+.contact-list li:last-child {
+  margin-bottom: 0;
+}
+
+.contact-list strong {
+  color: var(--text-primary);
+  display: block;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.contact-list span {
+  font-size: 16px;
+}
+
+/* Majors Section */
+.majors-section {
+  margin-bottom: var(--space-12);
+}
+
+.majors-section h3 {
+  font-size: 20px;
+  text-align: center;
+  color: var(--text-primary);
+  margin-bottom: var(--space-6);
+}
+
+.majors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.major-card {
+  background-color: var(--surface-color);
+  padding: var(--space-6);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.major-card h4 {
+  font-size: 16px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Footer */
+.footer {
+  background-color: var(--surface-color);
+  border-top: 1px solid var(--border-color);
+  padding: var(--space-6) 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
