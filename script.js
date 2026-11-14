@@ -628,7 +628,7 @@ function logout() {
     }
 
     localStorage.removeItem("sesi_addawah");
-    location.reload();
+    window.location.href = "etertib.html"; // <--- MENGARAHKAN PAKSA KE ETERTIB
   });
 }
 
